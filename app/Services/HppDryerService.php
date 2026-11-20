@@ -2,17 +2,21 @@
 
 namespace App\Services;
 
+use App\Models\DetailBongkarKedi;
 use App\Models\DetailHasil;
 use App\Models\DetailMasuk;
+use App\Models\DetailMasukKedi;
 use App\Models\HargaPegawai;
 use App\Models\HppLogHarian;
 use App\Models\HppVeneerBasahLog;
 use App\Models\HppVeneerBasahSummary;
 use App\Models\OngkosProduksiDryer;
+use App\Models\ProduksiKedi;
 use App\Models\ProduksiPressDryer;
 use App\Models\StokVeneerKering;
 use App\Models\Target;
 use App\Models\Ukuran;
+use App\Models\ValidasiKedi;
 use App\Models\ValidasiPressDryer;
 use Illuminate\Support\Collection;
 use Carbon\Carbon;
@@ -24,13 +28,18 @@ use Illuminate\Support\Facades\Log;
  * ─────────────────────────────────────────────────────────────────────────────
  *   HPP KERING / m³ = HPP VENEER BASAH / m³  +  ONGKOS PEGAWAI / m³  +  ONGKOS MESIN / m³
  *
- *   • HPP veneer basah  : HPP rata-rata veneer basah (Log HPP Veneer Basah) saat veneer itu
- *                         dipakai dryer. Ini sudah berisi kayu + pekerja + mesin + bahan penolong
- *                         dari proses rotary.
- *   • Ongkos pegawai    : Σ (harga pegawai per hari ÷ jam target × jam kerja) semua pegawai
- *                         dryer pada produksi itu.
- *   • Ongkos mesin      : Σ ongkos_mesin semua mesin dryer pada produksi itu.
- *   • Pembagi           : total m³ SEMUA hasil produksi dryer tsb (panjang×lebar×tebal×lembar ÷ 10.000.000).
+ * Komponen HPP HANYA dihitung untuk veneer hasil PRODUKSI:
+ *   • Press Dryer : pegawai & mesin dari produksi dryer tsb.
+ *   • Kedi        : pegawai & mesin dari produksi kedi tsb (DetailPegawaiKedi + mesin kedi).
+ * Sumber lain (opname, nota/mutasi, pilih veneer, repair, veneer jadi) TIDAK diberi komponen:
+ * barisnya memakai HPP Average stok saat itu (lihat VeneerMutasiService::recalculateStokKering).
+ *
+ *   • HPP veneer basah : dari VENEER BASAH YANG DIMASUKKAN ke produksi (modal input), diambil
+ *                        dari HPP Average stok basah. Asal angkanya dicatat di kolom
+ *                        sumber_hpp_basah supaya bisa dijelaskan.
+ *   • Ongkos pegawai   : Σ (harga pegawai per hari ÷ jam target × jam kerja) pegawai produksi itu.
+ *   • Ongkos mesin     : Σ ongkos_mesin mesin produksi itu.
+ *   • Pembagi          : total m³ SEMUA hasil produksi tsb (panjang×lebar×tebal×lembar ÷ 10.000.000).
  *
  * Karena ongkos pegawai dan mesin selalu ≥ 0 dan DITAMBAHKAN ke HPP basah, HPP kering
  * tidak mungkin lebih kecil dari HPP basah.
@@ -40,7 +49,7 @@ class HppDryerService
     /** panjang (cm) × lebar (cm) × tebal (mm) × lembar ÷ 10.000.000 = m³ (sama dengan Rotary & Gudang). */
     public const PEMBAGI_M3 = 10_000_000;
 
-    /** Jam kerja normal jika target jam dryer belum diisi di menu Target. */
+    /** Jam kerja normal jika target jam belum diisi di menu Target. */
     private const JAM_NORMAL_DEFAULT = 10;
 
     /** @deprecated placeholder lama, hanya dipertahankan agar DashboardHppDryer tidak error. */
@@ -48,10 +57,6 @@ class HppDryerService
 
     /** Cache per-instance supaya hitung banyak palet tidak mengulang query. */
     private array $cacheBasah = [];
-
-    /** Baris dryer + rincian komponennya per jenis kayu (0 = semua jenis). */
-    private array $cacheBarisDryer = [];
-    private array $cacheUkuran = [];
 
     // =========================================================================
     // ENTRY POINT — dipanggil dari Listener (saat produksi divalidasi)
@@ -75,9 +80,8 @@ class HppDryerService
         $jumlahBaris    = 0;
 
         DB::transaction(function () use ($idProduksiList, &$jumlahBaris) {
-            $produkTerdampak = [];
+            $produkTerdampak  = [];
             $tanggalTerdampak = [];
-            $jenisTerdampak = [];
 
             foreach ($idProduksiList as $id) {
                 $produksi = ProduksiPressDryer::with([
@@ -101,14 +105,7 @@ class HppDryerService
                         (int) $baris->id_ukuran, (int) $baris->id_jenis_kayu, (string) $baris->kw,
                     ];
                     $tanggalTerdampak[Carbon::parse($baris->tanggal_transaksi)->toDateString()] = true;
-                    $jenisTerdampak[(int) $baris->id_jenis_kayu] = true;
                 }
-            }
-
-            // Step 2b: sumber masuk lain (pilih veneer, opname, nota, repair, dll) memakai
-            // komposisi HPP palet dryer yang baru dihitung → komponen & HPP-nya ikut terisi
-            foreach ($this->turunkanSumberLainJenis(array_keys($jenisTerdampak)) as $k => $v) {
-                $produkTerdampak[$k] = $v;
             }
 
             // Step 3: hitung ulang saldo m³ + nilai stok + HPP Average (ledger yang sama dengan modul mutasi)
@@ -126,14 +123,69 @@ class HppDryerService
     }
 
     // =========================================================================
+    // ENTRY POINT KEDI — dipanggil saat palet hasil bongkar kedi diterima gudang
+    // =========================================================================
+
+    /**
+     * Hitung (ulang) HPP kering palet hasil KEDI dari data kedi sendiri:
+     * veneer basah yang dimasukkan ke kedi + pegawai kedi + mesin kedi.
+     *
+     * @param  int[]  $idProduksiKediList
+     * @return int    jumlah baris stok yang diperbarui
+     */
+    public function prosesBanyakKedi(array $idProduksiKediList): int
+    {
+        $idProduksiKediList = array_values(array_unique(array_filter(array_map('intval', $idProduksiKediList))));
+        $jumlahBaris        = 0;
+
+        DB::transaction(function () use ($idProduksiKediList, &$jumlahBaris) {
+            $produkTerdampak  = [];
+            $tanggalTerdampak = [];
+
+            foreach ($idProduksiKediList as $id) {
+                $produksi = ProduksiKedi::with([
+                    'detailBongkarKedi.ukuran',
+                    'detailMasukKedi.ukuran',
+                    'detailPegawaiKedi',
+                    'mesin',
+                ])->find($id);
+
+                if (! $produksi) {
+                    continue;
+                }
+
+                foreach ($this->terapkanHppKedi($produksi) as $baris) {
+                    $jumlahBaris++;
+                    $produkTerdampak[$baris->id_ukuran . '|' . $baris->id_jenis_kayu . '|' . $baris->kw] = [
+                        (int) $baris->id_ukuran, (int) $baris->id_jenis_kayu, (string) $baris->kw,
+                    ];
+                    $tanggalTerdampak[Carbon::parse($baris->tanggal_transaksi)->toDateString()] = true;
+                }
+            }
+
+            foreach ($produkTerdampak as [$idUkuran, $idJenis, $kw]) {
+                $this->hitungUlangLedger($idUkuran, $idJenis, $kw);
+            }
+
+            foreach (array_keys($tanggalTerdampak) as $tgl) {
+                $this->updateLogHarian($tgl);
+            }
+        });
+
+        return $jumlahBaris;
+    }
+
+    // =========================================================================
     // KOMPONEN ONGKOS PRODUKSI (pegawai + mesin) — hitungan murni, tidak menyimpan
     // =========================================================================
 
     /**
+     * Ongkos pegawai dryer.
+     *
      * @return array{
      *   m3_total: float, pegawai: float, mesin: float, jumlah_pegawai: int, jumlah_mesin: int,
      *   harga_per_hari: float, jam_normal: float, rata_ongkos_mesin: float,
-     *   pegawai_estimasi: bool, mesin_estimasi: bool
+     *   pegawai_estimasi: bool, mesin_estimasi: bool, sumber_pegawai: string, sumber_mesin: string
      * }
      */
     public function komponenProduksi(ProduksiPressDryer $produksi): array
@@ -145,34 +197,15 @@ class HppDryerService
 
         // ── Ongkos pegawai: harga per hari ÷ jam target × jam kerja ───────────
         // Harga pegawai diambil sama seperti perhitungan HPP veneer basah (rotary).
-        $hargaPerHari = (float) (HargaPegawai::first()->harga ?? 0);
+        $hargaPerHari = $this->hargaPegawaiPerHari();
         $jamNormal    = $this->jamNormalDryer($produksi);
-        $hargaPerJam  = $jamNormal > 0 ? $hargaPerHari / $jamNormal : 0.0;
 
-        $totalPegawai   = 0.0;
-        $jumlahPegawai  = 0;
-
-        foreach ($produksi->detailPegawais as $p) {
-            $jam = $this->jamKerjaPegawai($p->masuk, $p->pulang);
-
-            // Jam masuk/pulang kosong atau sama (0 jam) → dianggap kerja penuh satu shift,
-            // supaya ongkos pegawai tidak hilang (nol).
-            if ($jam <= 0) {
-                $jam = $jamNormal;
-            }
-
-            $totalPegawai += $hargaPerJam * $jam;
-            $jumlahPegawai++;
-        }
+        [$totalPegawai, $jumlahPegawai] = $this->ongkosPegawaiDari($produksi->detailPegawais, $hargaPerHari, $jamNormal);
 
         // ── Ongkos mesin: Σ ongkos_mesin tiap mesin dryer produksi ini ────────
-        $totalMesin   = 0.0;
-        $jumlahMesin  = 0;
-
-        foreach ($produksi->detailMesins as $dm) {
-            $totalMesin += (float) ($dm->mesin->ongkos_mesin ?? 0);
-            $jumlahMesin++;
-        }
+        [$totalMesin, $jumlahMesin, $namaMesin] = $this->ongkosMesinDari(
+            $produksi->detailMesins->map(fn ($dm) => $dm->mesin)
+        );
 
         // ── Cadangan: data pegawai / mesin produksi ini kosong atau nilainya 0 ──
         // Dipakai rata-rata ongkos (Rp per produksi) dari produksi dryer shift yang sama
@@ -180,12 +213,22 @@ class HppDryerService
         $pegawaiEstimasi = false;
         $mesinEstimasi   = false;
 
+        $sumberPegawai = $jumlahPegawai . ' pegawai × Rp ' . $this->angka($hargaPerHari)
+            . '/hari ÷ ' . $this->angka($jamNormal, 1) . ' jam × jam kerja masing-masing (produksi dryer ini)';
+        $sumberMesin = $jumlahMesin > 0
+            ? 'Mesin produksi dryer ini: ' . implode(', ', $namaMesin)
+            : '';
+
         if ($totalPegawai <= 0) {
             $cadangan = $this->rataOngkosShift($produksi, 'ongkos_pekerja');
             if ($cadangan > 0) {
                 $totalPegawai    = $cadangan;
                 $pegawaiEstimasi = true;
                 $jumlahPegawai   = 0;
+                $sumberPegawai   = 'ESTIMASI: rata-rata ongkos pegawai 10 produksi dryer shift ' . $produksi->shift
+                    . ' terdekat (data pegawai produksi ini kosong / 0)';
+            } else {
+                $sumberPegawai = 'Data pegawai produksi dryer ini kosong dan tidak ada cadangan';
             }
         }
 
@@ -195,6 +238,10 @@ class HppDryerService
                 $totalMesin    = $cadangan;
                 $mesinEstimasi = true;
                 $jumlahMesin   = 0;
+                $sumberMesin   = 'ESTIMASI: rata-rata ongkos mesin 10 produksi dryer shift ' . $produksi->shift
+                    . ' terdekat (data mesin produksi ini kosong / ongkos mesin 0)';
+            } else {
+                $sumberMesin = 'Data mesin produksi dryer ini kosong dan tidak ada cadangan';
             }
         }
 
@@ -209,8 +256,106 @@ class HppDryerService
             'harga_per_hari'    => $hargaPerHari,
             'jam_normal'        => $jamNormal,
             'rata_ongkos_mesin' => $jumlahMesin > 0 ? round($totalMesin / $jumlahMesin, 2) : 0.0,
+            'sumber_pegawai'    => $sumberPegawai,
+            'sumber_mesin'      => $sumberMesin,
         ];
     }
+
+    /**
+     * Ongkos pegawai + mesin satu produksi KEDI (dari DetailPegawaiKedi dan mesin kedi).
+     * Tidak ada cadangan rata-rata: kalau data kosong, angkanya 0 dan ditandai di sumber_*.
+     *
+     * @return array{m3_total: float, pegawai: float, mesin: float, jumlah_pegawai: int, jumlah_mesin: int, sumber_pegawai: string, sumber_mesin: string}
+     */
+    public function komponenKedi(ProduksiKedi $produksi): array
+    {
+        $produksi->loadMissing(['detailBongkarKedi.ukuran', 'detailPegawaiKedi', 'mesin']);
+
+        $m3Total = (float) $produksi->detailBongkarKedi
+            ->sum(fn ($d) => $this->hitungM3($d->ukuran, (float) ($d->jumlah ?? 0)));
+
+        $hargaPerHari = $this->hargaPegawaiPerHari();
+        $jamNormal    = $this->jamNormalKedi();
+
+        [$totalPegawai, $jumlahPegawai] = $this->ongkosPegawaiDari($produksi->detailPegawaiKedi, $hargaPerHari, $jamNormal);
+        [$totalMesin, $jumlahMesin, $namaMesin] = $this->ongkosMesinDari($produksi->mesin ? [$produksi->mesin] : []);
+
+        $sumberPegawai = $jumlahPegawai > 0
+            ? $jumlahPegawai . ' pegawai kedi × Rp ' . $this->angka($hargaPerHari)
+                . '/hari ÷ ' . $this->angka($jamNormal, 1) . ' jam × jam kerja masing-masing'
+            : 'Data pegawai produksi kedi ini kosong';
+
+        $sumberMesin = $jumlahMesin > 0
+            ? 'Mesin kedi: ' . implode(', ', $namaMesin) . ' (ongkos mesin dihitung 1× per produksi kedi)'
+            : 'Mesin produksi kedi ini belum diisi';
+
+        return [
+            'm3_total'       => $m3Total,
+            'pegawai'        => round($totalPegawai, 2),
+            'mesin'          => round($totalMesin, 2),
+            'jumlah_pegawai' => $jumlahPegawai,
+            'jumlah_mesin'   => $jumlahMesin,
+            'sumber_pegawai' => $sumberPegawai,
+            'sumber_mesin'   => $sumberMesin,
+        ];
+    }
+
+    private function hargaPegawaiPerHari(): float
+    {
+        return (float) (HargaPegawai::first()->harga ?? 0);
+    }
+
+    /**
+     * Σ (harga per jam × jam kerja) tiap pegawai. Jam masuk/pulang kosong atau 0 jam
+     * dianggap kerja penuh satu shift supaya ongkos pegawai tidak hilang.
+     *
+     * @return array{0: float, 1: int}  [total rupiah, jumlah pegawai]
+     */
+    private function ongkosPegawaiDari($daftarPegawai, float $hargaPerHari, float $jamNormal): array
+    {
+        $hargaPerJam = $jamNormal > 0 ? $hargaPerHari / $jamNormal : 0.0;
+        $total       = 0.0;
+        $jumlah      = 0;
+
+        foreach ($daftarPegawai as $p) {
+            $jam = $this->jamKerjaPegawai($p->masuk, $p->pulang);
+
+            if ($jam <= 0) {
+                // Ijin dan tidak ada jam kerja → tidak masuk kerja, tidak dihitung
+                if (filled($p->ijin)) {
+                    continue;
+                }
+
+                $jam = $jamNormal;
+            }
+            $total += $hargaPerJam * $jam;
+            $jumlah++;
+        }
+
+        return [$total, $jumlah];
+    }
+
+    /**
+     * Σ ongkos_mesin dari daftar mesin.
+     *
+     * @return array{0: float, 1: int, 2: string[]}  [total rupiah, jumlah mesin, daftar "nama (Rp ...)"]
+     */
+    private function ongkosMesinDari($daftarMesin): array
+    {
+        $total  = 0.0;
+        $jumlah = 0;
+        $nama   = [];
+
+        foreach ($daftarMesin as $mesin) {
+            $ongkos  = (float) ($mesin->ongkos_mesin ?? 0);
+            $total  += $ongkos;
+            $jumlah++;
+            $nama[]  = ($mesin->nama_mesin ?? 'Mesin') . ' (Rp ' . $this->angka($ongkos) . ')';
+        }
+
+        return [$total, $jumlah, $nama];
+    }
+
 
     /**
      * Rata-rata ongkos (Rp per produksi) dari maksimal 10 produksi dryer shift sama terdekat
@@ -257,146 +402,46 @@ class HppDryerService
     }
 
     // =========================================================================
-    // HPP VENEER BASAH untuk satu palet hasil dryer
+    // HPP VENEER BASAH — dengan catatan ASAL angkanya
     // =========================================================================
 
     /**
-     * HPP veneer basah per m³ yang dipakai untuk palet hasil dryer ini.
+     * HPP veneer basah per m³ untuk palet hasil dryer + asal angkanya.
      * Urutan sumber (yang pertama > 0 dipakai):
-     *   1. HPP Average pada log KELUAR veneer basah milik palet ini (dicatat saat produksi divalidasi)
-     *      = angka yang sama dengan kolom HPP Average di Log HPP Veneer Basah.
-     *   2. HPP Average stok veneer basah SEMUA modal produksi (input dryer), dibobot m³ modal.
-     *   3. HPP Average stok veneer basah dengan jenis kayu + ukuran + KW palet ini.
-     *   4. Rata-rata HPP Average semua KW (jenis kayu + ukuran sama), dibobot kubikasi.
-     *   5. Komponen HPP palet basah MASUK terakhir (kayu+pekerja+mesin+bahan) untuk jenis kayu + ukuran sama.
-     *   6-7. Cadangan terakhir: HPP Average veneer basah jenis kayu yang sama (tebal sama dulu, lalu semua ukuran).
+     *   1. MODAL PRODUKSI: veneer basah yang benar-benar dimasukkan ke produksi dryer ini
+     *      (HPP Average stok basah per jenis kayu + ukuran + KW modal, dibobot m³ modal).
+     *   2. HPP Average pada log KELUAR veneer basah milik palet ini.
+     *   3-8. Cadangan (lihat hppBasahCadangan()).
+     *
+     * @return array{hpp: float, sumber: string}
      */
-    public function hppBasahUntukPalet(DetailHasil $dh): float
+    public function rincianBasahUntukPalet(DetailHasil $dh): array
     {
-        if (isset($this->cacheBasah[$dh->id])) {
-            return $this->cacheBasah[$dh->id];
+        if (isset($this->cacheBasah['dh:' . $dh->id])) {
+            return $this->cacheBasah['dh:' . $dh->id];
         }
 
         $dh->loadMissing('ukuran');
-        $u = $dh->ukuran;
 
-        // 1. Log keluar basah milik palet ini
-        $hpp = (float) HppVeneerBasahLog::where('tipe_transaksi', 'keluar')
-            ->where('referensi_type', DetailHasil::class)
-            ->where('referensi_id', $dh->id)
-            ->where('hpp_average', '>', 0)
-            ->orderByDesc('id')
-            ->value('hpp_average');
+        // 1. Modal produksi (input veneer basah)
+        $modals = DetailMasuk::with('ukuran')->where('id_produksi_dryer', $dh->id_produksi_dryer)->get();
+        [$hpp, $sumber] = $this->hppBasahDariModal($modals, 'isi', 'Modal produksi dryer');
 
-        // 2. Semua modal produksi (input veneer basah yang dipakai dryer), dibobot m³ modal.
-        // Ukuran veneer kering bisa berbeda dari ukuran veneer basah (menyusut saat dikeringkan),
-        // jadi HPP basah dihitung dari veneer basah yang benar-benar dimasukkan ke produksi ini.
+        // 2. Log keluar basah milik palet ini
         if ($hpp <= 0) {
-            $totalM3 = 0.0;
-            $totalNilai = 0.0;
-
-            $modals = DetailMasuk::with('ukuran')
-                ->where('id_produksi_dryer', $dh->id_produksi_dryer)
-                ->get();
-
-            foreach ($modals as $modal) {
-                $mu = $modal->ukuran;
-                if (! $mu) {
-                    continue;
-                }
-
-                $s = $this->summaryBasah((int) $modal->id_jenis_kayu, $mu, (string) $modal->kw);
-
-                $hppModal = $s ? (float) $s->hpp_average : 0.0;
-
-                // KW modal tidak ada di stok basah → rata-rata semua KW ukuran yang sama
-                if ($hppModal <= 0) {
-                    $hppModal = (float) HppVeneerBasahSummary::where('id_jenis_kayu', $modal->id_jenis_kayu)
-                        ->where('panjang', $mu->panjang)->where('lebar', $mu->lebar)->where('tebal', $mu->tebal)
-                        ->where('hpp_average', '>', 0)
-                        ->avg('hpp_average');
-                }
-
-                if ($hppModal > 0) {
-                    $m3Modal = $this->hitungM3($mu, (float) $modal->isi);
-                    $m3Modal = $m3Modal > 0 ? $m3Modal : 1.0;
-                    $totalM3    += $m3Modal;
-                    $totalNilai += $m3Modal * $hppModal;
-                }
-            }
-
-            if ($totalM3 > 0) {
-                $hpp = $totalNilai / $totalM3;
+            $hpp = $this->hppBasahLogKeluar(DetailHasil::class, (int) $dh->id);
+            if ($hpp > 0) {
+                $sumber = 'Log keluar veneer basah palet hasil ini (HPP Average saat produksi divalidasi)';
             }
         }
 
-        // 3. KW palet hasil
-        if ($hpp <= 0 && $u) {
-            $s = $this->summaryBasah($dh->id_jenis_kayu, $u, (string) $dh->kw);
-            $hpp = $s ? (float) $s->hpp_average : 0.0;
-        }
-
-        // 4. Semua KW
-        if ($hpp <= 0 && $u) {
-            $list = HppVeneerBasahSummary::where('id_jenis_kayu', $dh->id_jenis_kayu)
-                ->where('panjang', $u->panjang)->where('lebar', $u->lebar)->where('tebal', $u->tebal)
-                ->where('hpp_average', '>', 0)
-                ->get();
-
-            $kub = (float) $list->sum('stok_kubikasi');
-            if ($list->isNotEmpty()) {
-                $hpp = $kub > 0
-                    ? (float) $list->sum(fn ($s) => (float) $s->hpp_average * (float) $s->stok_kubikasi) / $kub
-                    : (float) $list->avg('hpp_average');
-            }
-        }
-
-        // 5. Komponen palet basah masuk terakhir
-        if ($hpp <= 0 && $u) {
-            $log = HppVeneerBasahLog::where('tipe_transaksi', 'masuk')
-                ->where('id_jenis_kayu', $dh->id_jenis_kayu)
-                ->where('panjang', $u->panjang)->where('lebar', $u->lebar)->where('tebal', $u->tebal)
-                ->whereRaw('(COALESCE(hpp_kayu,0)+COALESCE(hpp_pekerja,0)+COALESCE(hpp_mesin,0)+COALESCE(hpp_bahan_penolong,0)) > 0')
-                ->orderByDesc('tanggal')->orderByDesc('id')
-                ->first();
-
-            if ($log) {
-                $hpp = (float) $log->hpp_kayu + (float) $log->hpp_pekerja + (float) $log->hpp_mesin + (float) $log->hpp_bahan_penolong;
-            }
-        }
-
-        // 6. Jenis kayu + tebal sama (ukuran lain), lalu 7. jenis kayu sama saja — dibobot kubikasi
-        if ($hpp <= 0 && $u) {
-            foreach ([true, false] as $denganTebal) {
-                $list = HppVeneerBasahSummary::where('id_jenis_kayu', $dh->id_jenis_kayu)
-                    ->when($denganTebal, fn ($q) => $q->where('tebal', $u->tebal))
-                    ->where('hpp_average', '>', 0)
-                    ->get();
-
-                if ($list->isNotEmpty()) {
-                    $kub = (float) $list->sum('stok_kubikasi');
-                    $hpp = $kub > 0
-                        ? (float) $list->sum(fn ($s) => (float) $s->hpp_average * (float) $s->stok_kubikasi) / $kub
-                        : (float) $list->avg('hpp_average');
-                    break;
-                }
-            }
-        }
-
-        // 8. Komponen palet basah MASUK terakhir untuk jenis kayu yang sama (ukuran apa saja)
+        // 3-8. Cadangan
         if ($hpp <= 0) {
-            $log = HppVeneerBasahLog::where('tipe_transaksi', 'masuk')
-                ->where('id_jenis_kayu', $dh->id_jenis_kayu)
-                ->whereRaw('(COALESCE(hpp_kayu,0)+COALESCE(hpp_pekerja,0)+COALESCE(hpp_mesin,0)+COALESCE(hpp_bahan_penolong,0)) > 0')
-                ->orderByDesc('tanggal')->orderByDesc('id')
-                ->first();
-
-            if ($log) {
-                $hpp = (float) $log->hpp_kayu + (float) $log->hpp_pekerja + (float) $log->hpp_mesin + (float) $log->hpp_bahan_penolong;
-            }
+            [$hpp, $sumber] = $this->hppBasahCadangan((int) $dh->id_jenis_kayu, $dh->ukuran, (string) $dh->kw);
         }
 
         if ($hpp <= 0) {
+            $sumber = 'TIDAK DITEMUKAN: stok / log veneer basah untuk jenis kayu ini belum ada';
             Log::warning('HppDryerService: HPP veneer basah tidak ditemukan', [
                 'id_detail_hasil' => $dh->id,
                 'id_jenis_kayu'   => $dh->id_jenis_kayu,
@@ -405,7 +450,220 @@ class HppDryerService
             ]);
         }
 
-        return $this->cacheBasah[$dh->id] = round($hpp, 4);
+        return $this->cacheBasah['dh:' . $dh->id] = ['hpp' => round($hpp, 4), 'sumber' => $sumber];
+    }
+
+    /** Sama seperti rincianBasahUntukPalet(), untuk palet hasil bongkar KEDI. */
+    public function rincianBasahUntukKedi(DetailBongkarKedi $dbk): array
+    {
+        if (isset($this->cacheBasah['kd:' . $dbk->id])) {
+            return $this->cacheBasah['kd:' . $dbk->id];
+        }
+
+        $dbk->loadMissing('ukuran');
+
+        // 1. Modal kedi (veneer basah yang dimasukkan ke kedi)
+        $modals = DetailMasukKedi::with('ukuran')->where('id_produksi_kedi', $dbk->id_produksi_kedi)->get();
+        [$hpp, $sumber] = $this->hppBasahDariModal($modals, 'jumlah', 'Modal produksi kedi');
+
+        // 2. Log keluar basah milik palet bongkar ini
+        if ($hpp <= 0) {
+            $hpp = $this->hppBasahLogKeluar(DetailBongkarKedi::class, (int) $dbk->id);
+            if ($hpp > 0) {
+                $sumber = 'Log keluar veneer basah palet bongkar kedi ini (HPP Average saat produksi divalidasi)';
+            }
+        }
+
+        // 3-8. Cadangan
+        if ($hpp <= 0) {
+            [$hpp, $sumber] = $this->hppBasahCadangan((int) $dbk->id_jenis_kayu, $dbk->ukuran, (string) $dbk->kw);
+        }
+
+        if ($hpp <= 0) {
+            $sumber = 'TIDAK DITEMUKAN: stok / log veneer basah untuk jenis kayu ini belum ada';
+            Log::warning('HppDryerService: HPP veneer basah kedi tidak ditemukan', [
+                'id_detail_bongkar_kedi' => $dbk->id,
+                'id_jenis_kayu'          => $dbk->id_jenis_kayu,
+                'id_ukuran'              => $dbk->id_ukuran,
+                'kw'                     => $dbk->kw,
+            ]);
+        }
+
+        return $this->cacheBasah['kd:' . $dbk->id] = ['hpp' => round($hpp, 4), 'sumber' => $sumber];
+    }
+
+    /** Dipertahankan agar pemanggil lama tetap jalan: hanya angka HPP basah. */
+    public function hppBasahUntukPalet(DetailHasil $dh): float
+    {
+        return $this->rincianBasahUntukPalet($dh)['hpp'];
+    }
+
+    /** HPP Average pada log KELUAR basah milik satu detail (palet hasil dryer / palet bongkar kedi). */
+    private function hppBasahLogKeluar(string $kelasReferensi, int $idReferensi): float
+    {
+        return (float) HppVeneerBasahLog::where('tipe_transaksi', 'keluar')
+            ->where('referensi_type', $kelasReferensi)
+            ->where('referensi_id', $idReferensi)
+            ->where('hpp_average', '>', 0)
+            ->orderByDesc('id')
+            ->value('hpp_average');
+    }
+
+    /**
+     * HPP basah dari veneer basah yang DIMASUKKAN ke produksi (modal), dibobot m³ modal.
+     * Ukuran veneer kering bisa berbeda dari veneer basah (menyusut saat dikeringkan), jadi
+     * yang dipakai adalah ukuran/KW modal.
+     *
+     * @param  iterable  $modals        DetailMasuk (kolom jumlah: isi) atau DetailMasukKedi (kolom jumlah: jumlah)
+     * @return array{0: float, 1: string}  [hpp per m³, keterangan asal]
+     */
+    private function hppBasahDariModal(iterable $modals, string $kolomJumlah, string $label): array
+    {
+        $totalM3    = 0.0;
+        $totalNilai = 0.0;
+        $rincian    = [];
+
+        foreach ($modals as $modal) {
+            $mu = $modal->ukuran;
+            if (! $mu) {
+                continue;
+            }
+
+            $s        = $this->summaryBasah((int) $modal->id_jenis_kayu, $mu, (string) $modal->kw);
+            $hppModal = $s ? (float) $s->hpp_average : 0.0;
+            $semuaKw  = false;
+
+            // KW modal tidak ada di stok basah → rata-rata semua KW ukuran yang sama
+            if ($hppModal <= 0) {
+                $hppModal = (float) HppVeneerBasahSummary::where('id_jenis_kayu', $modal->id_jenis_kayu)
+                    ->where('panjang', $mu->panjang)->where('lebar', $mu->lebar)->where('tebal', $mu->tebal)
+                    ->where('hpp_average', '>', 0)
+                    ->avg('hpp_average');
+                $semuaKw = $hppModal > 0;
+            }
+
+            if ($hppModal > 0) {
+                $m3Modal = $this->hitungM3($mu, (float) $modal->{$kolomJumlah});
+                $m3Modal = $m3Modal > 0 ? $m3Modal : 1.0;
+
+                $totalM3    += $m3Modal;
+                $totalNilai += $m3Modal * $hppModal;
+
+                $kunci = (float) $mu->panjang . '×' . (float) $mu->lebar . '×' . (float) $mu->tebal
+                    . ' KW ' . $modal->kw . ($semuaKw ? ' (rata-rata semua KW)' : '')
+                    . ' = Rp ' . $this->angka($hppModal);
+                $rincian[$kunci] = true;
+            }
+        }
+
+        if ($totalM3 <= 0) {
+            return [0.0, ''];
+        }
+
+        $daftar = array_keys($rincian);
+        $teks   = implode('; ', array_slice($daftar, 0, 3)) . (count($daftar) > 3 ? '; +' . (count($daftar) - 3) . ' lainnya' : '');
+
+        return [
+            $totalNilai / $totalM3,
+            $label . ': HPP Average stok basah dibobot m³ modal — ' . $teks,
+        ];
+    }
+
+    /**
+     * Sumber cadangan HPP basah bila modal & log keluar tidak ada.
+     *   a. HPP Average stok basah jenis kayu + ukuran + KW yang sama
+     *   b. Rata-rata semua KW (jenis kayu + ukuran sama), dibobot kubikasi
+     *   c. Komponen palet basah MASUK terakhir (kayu+pekerja+mesin+bahan) ukuran sama
+     *   d. Jenis kayu + tebal sama (ukuran lain), lalu jenis kayu sama saja — dibobot kubikasi
+     *   e. Komponen palet basah MASUK terakhir jenis kayu sama (ukuran apa saja)
+     *
+     * @return array{0: float, 1: string}
+     */
+    private function hppBasahCadangan(int $idJenisKayu, ?Ukuran $u, string $kw): array
+    {
+        $kompSql = '(COALESCE(hpp_kayu,0)+COALESCE(hpp_pekerja,0)+COALESCE(hpp_mesin,0)+COALESCE(hpp_bahan_penolong,0)) > 0';
+
+        // a. KW sama
+        if ($u) {
+            $s   = $this->summaryBasah($idJenisKayu, $u, $kw);
+            $hpp = $s ? (float) $s->hpp_average : 0.0;
+            if ($hpp > 0) {
+                return [$hpp, 'CADANGAN: HPP Average stok basah ukuran + KW hasil yang sama'];
+            }
+        }
+
+        // b. Semua KW
+        if ($u) {
+            $list = HppVeneerBasahSummary::where('id_jenis_kayu', $idJenisKayu)
+                ->where('panjang', $u->panjang)->where('lebar', $u->lebar)->where('tebal', $u->tebal)
+                ->where('hpp_average', '>', 0)
+                ->get();
+
+            if ($list->isNotEmpty()) {
+                return [$this->rataBobotKubikasi($list), 'CADANGAN: rata-rata semua KW stok basah ukuran hasil yang sama'];
+            }
+        }
+
+        // c. Palet basah masuk terakhir, ukuran sama
+        if ($u) {
+            $log = HppVeneerBasahLog::where('tipe_transaksi', 'masuk')
+                ->where('id_jenis_kayu', $idJenisKayu)
+                ->where('panjang', $u->panjang)->where('lebar', $u->lebar)->where('tebal', $u->tebal)
+                ->whereRaw($kompSql)
+                ->orderByDesc('tanggal')->orderByDesc('id')
+                ->first();
+
+            if ($log) {
+                return [
+                    (float) $log->hpp_kayu + (float) $log->hpp_pekerja + (float) $log->hpp_mesin + (float) $log->hpp_bahan_penolong,
+                    'CADANGAN: komponen palet veneer basah masuk terakhir (ukuran sama)',
+                ];
+            }
+        }
+
+        // d. Jenis kayu + tebal sama, lalu jenis kayu sama saja
+        if ($u) {
+            foreach ([true, false] as $denganTebal) {
+                $list = HppVeneerBasahSummary::where('id_jenis_kayu', $idJenisKayu)
+                    ->when($denganTebal, fn ($q) => $q->where('tebal', $u->tebal))
+                    ->where('hpp_average', '>', 0)
+                    ->get();
+
+                if ($list->isNotEmpty()) {
+                    return [
+                        $this->rataBobotKubikasi($list),
+                        $denganTebal
+                            ? 'CADANGAN: rata-rata stok basah jenis kayu + tebal yang sama (ukuran lain)'
+                            : 'CADANGAN: rata-rata stok basah jenis kayu yang sama (semua ukuran)',
+                    ];
+                }
+            }
+        }
+
+        // e. Palet basah masuk terakhir, jenis kayu sama
+        $log = HppVeneerBasahLog::where('tipe_transaksi', 'masuk')
+            ->where('id_jenis_kayu', $idJenisKayu)
+            ->whereRaw($kompSql)
+            ->orderByDesc('tanggal')->orderByDesc('id')
+            ->first();
+
+        if ($log) {
+            return [
+                (float) $log->hpp_kayu + (float) $log->hpp_pekerja + (float) $log->hpp_mesin + (float) $log->hpp_bahan_penolong,
+                'CADANGAN: komponen palet veneer basah masuk terakhir (jenis kayu sama, ukuran lain)',
+            ];
+        }
+
+        return [0.0, ''];
+    }
+
+    private function rataBobotKubikasi(Collection $list): float
+    {
+        $kub = (float) $list->sum('stok_kubikasi');
+
+        return $kub > 0
+            ? (float) $list->sum(fn ($s) => (float) $s->hpp_average * (float) $s->stok_kubikasi) / $kub
+            : (float) $list->avg('hpp_average');
     }
 
     private function summaryBasah(int $idJenisKayu, $ukuran, string $kw): ?HppVeneerBasahSummary
@@ -423,8 +681,9 @@ class HppDryerService
     // =========================================================================
 
     /**
-     * Isi komponen HPP (basah, ongkos, kering, nilai, m³) pada baris stok MASUK
-     * dari palet produksi ini. Saldo & HPP Average dihitung ulang oleh hitungUlangLedger().
+     * Isi komponen HPP (basah, pegawai, mesin, kering, nilai, m³) + asal angkanya pada baris
+     * stok MASUK dari palet produksi dryer ini. Saldo & HPP Average dihitung ulang oleh
+     * hitungUlangLedger().
      *
      * @return \Illuminate\Support\Collection<int, StokVeneerKering>
      */
@@ -439,7 +698,13 @@ class HppDryerService
         // Rupiah ongkos: dari record ongkos (kalau final, angka yang dikunci tetap dipakai)
         $rpPegawai = (float) $ongkos->ongkos_pekerja;
         $rpMesin   = (float) $ongkos->ongkos_mesin;
-        $ongkosPerM3 = $m3Total > 0 ? ($rpPegawai + $rpMesin) / $m3Total : 0.0;
+
+        $pegawaiPerM3 = $m3Total > 0 ? $rpPegawai / $m3Total : 0.0;
+        $mesinPerM3   = $m3Total > 0 ? $rpMesin / $m3Total : 0.0;
+        $ongkosPerM3  = $pegawaiPerM3 + $mesinPerM3;
+
+        // Keterangan asal pegawai & mesin (teks saja, tidak mempengaruhi angka)
+        $komp = $this->komponenProduksi($produksi);
 
         $barisList = StokVeneerKering::whereIn('id_detail_hasil_dryer', $detailMap->keys())
             ->where('jenis_transaksi', 'masuk')
@@ -454,15 +719,71 @@ class HppDryerService
             }
 
             $m3        = $this->hitungM3($dh->ukuran, (float) $baris->qty);
-            $hppBasah  = $this->hppBasahUntukPalet($dh);
-            $hppKering = $hppBasah + $ongkosPerM3;
+            $basah     = $this->rincianBasahUntukPalet($dh);
+            $hppKering = $basah['hpp'] + $ongkosPerM3;
 
             $baris->update([
                 'm3'                      => round($m3, 6),
-                'hpp_veneer_basah_per_m3' => round($hppBasah, 4),
+                'hpp_veneer_basah_per_m3' => round($basah['hpp'], 4),
+                'ongkos_pegawai_per_m3'   => round($pegawaiPerM3, 4),
+                'ongkos_mesin_per_m3'     => round($mesinPerM3, 4),
                 'ongkos_dryer_per_m3'     => round($ongkosPerM3, 4),
                 'hpp_kering_per_m3'       => round($hppKering, 4),
                 'nilai_transaksi'         => round($hppKering * $m3, 4),
+                'sumber_hpp_basah'        => mb_substr($basah['sumber'], 0, 500),
+                'sumber_pegawai'          => mb_substr($komp['sumber_pegawai'], 0, 500),
+                'sumber_mesin'            => mb_substr($komp['sumber_mesin'], 0, 500),
+            ]);
+        }
+
+        return $barisList;
+    }
+
+    /**
+     * Sama seperti terapkanHppPalet(), untuk palet hasil bongkar KEDI:
+     * HPP kering = HPP basah (modal kedi) + pegawai kedi/m³ + mesin kedi/m³.
+     *
+     * @return \Illuminate\Support\Collection<int, StokVeneerKering>
+     */
+    public function terapkanHppKedi(ProduksiKedi $produksi)
+    {
+        $produksi->loadMissing('detailBongkarKedi.ukuran');
+        $detailMap = $produksi->detailBongkarKedi->keyBy('id');
+
+        $komp    = $this->komponenKedi($produksi);
+        $m3Total = $komp['m3_total'];
+
+        $pegawaiPerM3 = $m3Total > 0 ? $komp['pegawai'] / $m3Total : 0.0;
+        $mesinPerM3   = $m3Total > 0 ? $komp['mesin'] / $m3Total : 0.0;
+        $ongkosPerM3  = $pegawaiPerM3 + $mesinPerM3;
+
+        $barisList = StokVeneerKering::whereIn('id_detail_bongkar_kedi', $detailMap->keys())
+            ->where('jenis_transaksi', 'masuk')
+            ->orderBy('tanggal_transaksi')
+            ->orderBy('id')
+            ->get();
+
+        foreach ($barisList as $baris) {
+            $dbk = $detailMap->get($baris->id_detail_bongkar_kedi);
+            if (! $dbk) {
+                continue;
+            }
+
+            $m3        = $this->hitungM3($dbk->ukuran, (float) $baris->qty);
+            $basah     = $this->rincianBasahUntukKedi($dbk);
+            $hppKering = $basah['hpp'] + $ongkosPerM3;
+
+            $baris->update([
+                'm3'                      => round($m3, 6),
+                'hpp_veneer_basah_per_m3' => round($basah['hpp'], 4),
+                'ongkos_pegawai_per_m3'   => round($pegawaiPerM3, 4),
+                'ongkos_mesin_per_m3'     => round($mesinPerM3, 4),
+                'ongkos_dryer_per_m3'     => round($ongkosPerM3, 4),
+                'hpp_kering_per_m3'       => round($hppKering, 4),
+                'nilai_transaksi'         => round($hppKering * $m3, 4),
+                'sumber_hpp_basah'        => mb_substr($basah['sumber'], 0, 500),
+                'sumber_pegawai'          => mb_substr($komp['sumber_pegawai'], 0, 500),
+                'sumber_mesin'            => mb_substr($komp['sumber_mesin'], 0, 500),
             ]);
         }
 
@@ -485,41 +806,36 @@ class HppDryerService
     }
 
     // =========================================================================
-    // KOMPONEN HPP SEMUA SUMBER MASUK (untuk tampilan & turunan)
+    // KOMPONEN HPP BARIS MASUK (untuk tampilan) — hanya sumber PRODUKSI
     // =========================================================================
 
-    /** Nama sumber baris masuk (untuk label di Log HPP Veneer Kering). */
-    public function labelSumber(StokVeneerKering $r): string
+    /** Nama sumber produksi satu baris masuk: 'Press Dryer', 'Kedi', atau null (bukan produksi). */
+    public function labelSumber(StokVeneerKering $r): ?string
     {
         if ($r->id_detail_hasil_dryer) {
             return 'Press Dryer';
         }
 
-        $ket = strtolower((string) $r->keterangan);
+        if ($r->id_detail_bongkar_kedi) {
+            return 'Kedi';
+        }
 
-        return match (true) {
-            str_contains($ket, 'pilih veneer')                          => 'Pilih Veneer',
-            str_contains($ket, 'opname')                                => 'Opname',
-            str_contains($ket, 'dari kedi')                             => 'Kedi',
-            str_contains($ket, 'veneer jadi')                           => 'Veneer Jadi',
-            str_starts_with($ket, 'dari ')                              => 'Repair / Serah Terima',
-            $r->id_veneer_mutasi || str_contains($ket, 'no nota')       => 'Nota / Mutasi',
-            default                                                     => 'Lainnya',
-        };
+        return null;
     }
 
     /**
-     * Rincian HPP per m³ untuk baris MASUK dari sumber apa pun.
-     *  - Press Dryer: basah + ongkos (dipecah pegawai/mesin sesuai tabel Ongkos Produksi Dryer).
-     *  - Sumber lain : basah + ongkos hasil turunan (lihat turunkanSumberLain), dipecah pegawai/mesin
-     *                  mengikuti perbandingan komposisi palet dryer produk yang sama.
+     * Rincian HPP per m³ untuk baris MASUK dari PRODUKSI (Press Dryer dan Kedi).
+     * Baris dari sumber lain (opname, nota, pilih veneer, repair, dll) tidak punya komponen
+     * dan TIDAK ikut dalam hasil — di tampilan tampil "—".
      *
      * @param  iterable<StokVeneerKering>  $rows
-     * @return array<int, array{basah: float, pegawai: float, mesin: float, total: float, final: bool, ada_ongkos: bool, sumber: string, turunan: bool}>
+     * @return array<int, array{basah: float, pegawai: float, mesin: float, total: float, final: bool, ada_ongkos: bool, sumber: string, turunan: bool, sumber_basah: string, sumber_pegawai: string, sumber_mesin: string}>
      */
     public function komponenBaris(iterable $rows): array
     {
-        $rows = collect($rows)->filter(fn ($r) => $r->jenis_transaksi === 'masuk')->values();
+        $rows = collect($rows)
+            ->filter(fn ($r) => $r->jenis_transaksi === 'masuk' && ($r->id_detail_hasil_dryer || $r->id_detail_bongkar_kedi))
+            ->values();
 
         if ($rows->isEmpty()) {
             return [];
@@ -548,215 +864,155 @@ class HppDryerService
                 $idProd = $produksiPerDetail[$r->id_detail_hasil_dryer] ?? null;
                 $o      = $idProd ? $ongkosMap->get($idProd) : null;
 
-                $ongkos    = (float) $r->ongkos_dryer_per_m3;
-                $rpPegawai = $o ? (float) $o->ongkos_pekerja : 0.0;
-                $rpMesin   = $o ? (float) $o->ongkos_mesin : 0.0;
-                $rpTotal   = $rpPegawai + $rpMesin;
+                $ongkos  = (float) $r->ongkos_dryer_per_m3;
+                $pegawai = (float) $r->ongkos_pegawai_per_m3;
+                $mesin   = (float) $r->ongkos_mesin_per_m3;
+
+                // Data lama (kolom rincian belum terisi): pecah ongkos menurut tabel Ongkos Produksi Dryer
+                if ($pegawai + $mesin <= 0 && $ongkos > 0) {
+                    $rpPegawai = $o ? (float) $o->ongkos_pekerja : 0.0;
+                    $rpMesin   = $o ? (float) $o->ongkos_mesin : 0.0;
+                    $rpTotal   = $rpPegawai + $rpMesin;
+                    $pegawai   = $rpTotal > 0 ? $ongkos * $rpPegawai / $rpTotal : 0.0;
+                    $mesin     = $rpTotal > 0 ? $ongkos * $rpMesin / $rpTotal : 0.0;
+                }
 
                 $hasil[$r->id] = [
-                    'basah'      => (float) $r->hpp_veneer_basah_per_m3,
-                    'pegawai'    => $rpTotal > 0 ? $ongkos * $rpPegawai / $rpTotal : 0.0,
-                    'mesin'      => $rpTotal > 0 ? $ongkos * $rpMesin / $rpTotal : 0.0,
-                    'total'      => (float) $r->hpp_kering_per_m3,
+                    'basah'          => (float) $r->hpp_veneer_basah_per_m3,
+                    'pegawai'        => $pegawai,
+                    'mesin'          => $mesin,
+                    'total'          => (float) $r->hpp_kering_per_m3,
                     // FINAL = produksi sudah divalidasi dan data pegawai + mesinnya benar-benar ada
-                    'final'      => $idProd !== null && $sudahValidasi->has($idProd)
+                    'final'          => $idProd !== null && $sudahValidasi->has($idProd)
                         && $o && (int) $o->ttl_pekerja > 0 && (int) $o->jumlah_mesin > 0,
-                    'ada_ongkos' => $o !== null,
-                    'sumber'     => 'Press Dryer',
-                    'turunan'    => false,
+                    'ada_ongkos'     => $o !== null,
+                    'sumber'         => 'Press Dryer',
+                    'turunan'        => false,
+                    'sumber_basah'   => (string) $r->sumber_hpp_basah,
+                    'sumber_pegawai' => (string) $r->sumber_pegawai,
+                    'sumber_mesin'   => (string) $r->sumber_mesin,
                 ];
             }
         }
 
-        // ── Sumber lain: komponen turunan ────────────────────────────────────
-        foreach ($rows->reject(fn ($r) => $r->id_detail_hasil_dryer) as $r) {
-            $basah  = (float) $r->hpp_veneer_basah_per_m3;
-            $ongkos = (float) $r->ongkos_dryer_per_m3;
+        // ── Sumber Kedi ───────────────────────────────────────────────────────
+        $kedi = $rows->filter(fn ($r) => $r->id_detail_bongkar_kedi && ! $r->id_detail_hasil_dryer);
 
-            $komposisi = $this->komposisi((int) $r->id_ukuran, (int) $r->id_jenis_kayu, $r->tanggal_transaksi);
-            $pm        = $komposisi ? $komposisi['pegawai'] + $komposisi['mesin'] : 0.0;
-            $rasio     = $pm > 0 ? $komposisi['pegawai'] / $pm : 0.5;
+        if ($kedi->isNotEmpty()) {
+            $produksiKediPerDetail = DetailBongkarKedi::whereIn('id', $kedi->pluck('id_detail_bongkar_kedi')->unique())
+                ->pluck('id_produksi_kedi', 'id');
 
-            $hasil[$r->id] = [
-                'basah'      => $basah,
-                'pegawai'    => $ongkos * $rasio,
-                'mesin'      => $ongkos * (1 - $rasio),
-                'total'      => (float) $r->hpp_kering_per_m3,
-                'final'      => (bool) ($komposisi['final'] ?? false),
-                'ada_ongkos' => true,
-                'sumber'     => $this->labelSumber($r),
-                'turunan'    => true,
-            ];
+            $kediValidasi = ValidasiKedi::whereIn('id_produksi_kedi', $produksiKediPerDetail->filter()->unique()->values())
+                ->where('tipe', 'bongkar')
+                ->where('status', 'divalidasi')
+                ->pluck('id_produksi_kedi')
+                ->flip();
+
+            foreach ($kedi as $r) {
+                $idProd  = $produksiKediPerDetail[$r->id_detail_bongkar_kedi] ?? null;
+                $pegawai = (float) $r->ongkos_pegawai_per_m3;
+                $mesin   = (float) $r->ongkos_mesin_per_m3;
+
+                $hasil[$r->id] = [
+                    'basah'          => (float) $r->hpp_veneer_basah_per_m3,
+                    'pegawai'        => $pegawai,
+                    'mesin'          => $mesin,
+                    'total'          => (float) $r->hpp_kering_per_m3,
+                    'final'          => $idProd !== null && $kediValidasi->has($idProd) && $pegawai > 0 && $mesin > 0,
+                    'ada_ongkos'     => ($pegawai + $mesin) > 0,
+                    'sumber'         => 'Kedi',
+                    'turunan'        => false,
+                    'sumber_basah'   => (string) $r->sumber_hpp_basah,
+                    'sumber_pegawai' => (string) $r->sumber_pegawai,
+                    'sumber_mesin'   => (string) $r->sumber_mesin,
+                ];
+            }
         }
 
         return $hasil;
     }
 
-    /** Palet masuk dari dryer (berHPP) satu jenis kayu + komponennya; 0 = semua jenis kayu. */
-    private function barisDryerJenis(int $idJenisKayu): Collection
-    {
-        if (isset($this->cacheBarisDryer[$idJenisKayu])) {
-            return $this->cacheBarisDryer[$idJenisKayu];
-        }
+    // =========================================================================
+    // SINKRON DATA LAMA
+    // =========================================================================
 
+    /**
+     * Palet kedi lama belum punya id_detail_bongkar_kedi. Dicocokkan dari keterangan
+     * "Dari Kedi (Palet X) ke Repair" + ukuran + jenis kayu + KW + jumlah lembar.
+     * Hanya diisi bila cocok TEPAT SATU detail bongkar kedi.
+     *
+     * @return int jumlah baris yang berhasil diisi
+     */
+    public function isiRelasiKedi(int $batas = 500): int
+    {
         $rows = StokVeneerKering::query()
             ->where('jenis_transaksi', 'masuk')
-            ->whereNotNull('id_detail_hasil_dryer')
-            ->where('hpp_kering_per_m3', '>', 0)
-            ->where('hpp_veneer_basah_per_m3', '>', 0)
-            ->when($idJenisKayu > 0, fn ($q) => $q->where('id_jenis_kayu', $idJenisKayu))
-            ->with('ukuran:id,tebal')
-            ->get(['id', 'id_ukuran', 'id_jenis_kayu', 'kw', 'tanggal_transaksi', 'jenis_transaksi', 'm3',
-                'id_detail_hasil_dryer', 'hpp_veneer_basah_per_m3', 'ongkos_dryer_per_m3', 'hpp_kering_per_m3'])
-            ->unique('id_detail_hasil_dryer')
-            ->values();
-
-        $komp = $this->komponenBaris($rows);
-
-        return $this->cacheBarisDryer[$idJenisKayu] = $rows
-            ->map(function ($r) use ($komp) {
-                $r->komp = $komp[$r->id] ?? null;
-
-                return $r;
-            })
-            ->filter(fn ($r) => $r->komp !== null)
-            ->values();
-    }
-
-    /**
-     * Komposisi HPP per m³ (basah, pegawai, mesin) yang dipakai untuk sumber masuk non-dryer:
-     * rata-rata tertimbang m³ dari palet dryer, dengan urutan kedekatan:
-     *   ukuran + jenis kayu sama (semua KW) → jenis kayu + tebal sama → jenis kayu sama → semua jenis kayu.
-     * Palet dryer yang tanggalnya ≤ tanggal baris diutamakan; kalau belum ada dipakai semuanya.
-     *
-     * @return array{basah: float, pegawai: float, mesin: float}|null
-     */
-    private function komposisi(int $idUkuran, int $idJenisKayu, $tanggal): ?array
-    {
-        $this->cacheUkuran[$idUkuran] ??= Ukuran::find($idUkuran);
-        $tebal = $this->cacheUkuran[$idUkuran]?->tebal;
-        $t     = $tanggal ? Carbon::parse($tanggal) : null;
-
-        $tingkat = [
-            [$idJenisKayu, fn ($r) => (int) $r->id_ukuran === $idUkuran],
-            [$idJenisKayu, fn ($r) => $tebal !== null && (float) $r->ukuran?->tebal === (float) $tebal],
-            [$idJenisKayu, fn ($r) => true],
-            [0,            fn ($r) => true],
-        ];
-
-        foreach ($tingkat as [$jenis, $cocok]) {
-            $semua = $this->barisDryerJenis($jenis)->filter($cocok);
-
-            if ($semua->isEmpty()) {
-                continue;
-            }
-
-            $sampai = $t ? $semua->filter(fn ($r) => $r->tanggal_transaksi && Carbon::parse($r->tanggal_transaksi)->lte($t)) : collect();
-            $pakai  = $sampai->isNotEmpty() ? $sampai : $semua;
-
-            $m3 = (float) $pakai->sum(fn ($r) => (float) $r->m3);
-            $rata = function (string $k) use ($pakai, $m3) {
-                return $m3 > 0
-                    ? (float) $pakai->sum(fn ($r) => $r->komp[$k] * (float) $r->m3) / $m3
-                    : (float) $pakai->avg(fn ($r) => $r->komp[$k]);
-            };
-
-            return [
-                'basah'   => $rata('basah'),
-                'pegawai' => $rata('pegawai'),
-                'mesin'   => $rata('mesin'),
-                // FINAL hanya jika semua palet dryer yang dijadikan acuan sudah FINAL
-                'final'   => $pakai->every(fn ($r) => $r->komp['final']),
-            ];
-        }
-
-        return null;
-    }
-
-    /**
-     * Isi komponen HPP baris masuk NON-dryer (pilih veneer, opname, nota/mutasi, repair, kedi,
-     * veneer jadi, dll) dari komposisi palet dryer. Karena itu harga rata-rata gudang tetap
-     * dekat dengan komponen HPP-nya, bukan tertarik ke 0.
-     *
-     * @return array<string, array{int,int,string}>  kunci produk yang berubah (untuk hitung ulang ledger)
-     */
-    private function terapkanTurunan(iterable $rows): array
-    {
-        $keys = [];
-
-        foreach ($rows as $r) {
-            $k = $this->komposisi((int) $r->id_ukuran, (int) $r->id_jenis_kayu, $r->tanggal_transaksi);
-
-            if (! $k) {
-                continue;
-            }
-
-            $ongkos = $k['pegawai'] + $k['mesin'];
-            $total  = $k['basah'] + $ongkos;
-
-            if ($total <= 0) {
-                continue;
-            }
-
-            $r->update([
-                'hpp_veneer_basah_per_m3' => round($k['basah'], 4),
-                'ongkos_dryer_per_m3'     => round($ongkos, 4),
-                'hpp_kering_per_m3'       => round($total, 4),
-                'nilai_transaksi'         => round($total * (float) $r->m3, 4),
-            ]);
-
-            $keys[$r->id_ukuran . '|' . $r->id_jenis_kayu . '|' . $r->kw] = [(int) $r->id_ukuran, (int) $r->id_jenis_kayu, (string) $r->kw];
-        }
-
-        return $keys;
-    }
-
-    private function queryMasukNonDryer()
-    {
-        return StokVeneerKering::query()
-            ->where('jenis_transaksi', 'masuk')
-            ->whereNull('id_detail_hasil_dryer');
-    }
-
-    /** Turunkan ulang SEMUA baris masuk non-dryer untuk jenis kayu tertentu (setelah palet dryer berubah). */
-    public function turunkanSumberLainJenis(array $idJenisKayu): array
-    {
-        if (! $idJenisKayu) {
-            return [];
-        }
-
-        $this->cacheBarisDryer = []; // palet dryer baru saja diperbarui
-
-        return $this->terapkanTurunan(
-            $this->queryMasukNonDryer()->whereIn('id_jenis_kayu', $idJenisKayu)->get()
-        );
-    }
-
-    /** Turunkan baris masuk non-dryer satu produk yang belum punya komponen (dipanggil dari ledger). */
-    public function turunkanSumberLainProduk(int $idUkuran, int $idJenisKayu, string $kw): void
-    {
-        $rows = $this->queryMasukNonDryer()
-            ->where('id_ukuran', $idUkuran)->where('id_jenis_kayu', $idJenisKayu)->where('kw', $kw)
-            ->where('hpp_veneer_basah_per_m3', '<=', 0)
-            ->where('ongkos_dryer_per_m3', '<=', 0)
+            ->whereNull('id_detail_hasil_dryer')
+            ->whereNull('id_detail_bongkar_kedi')
+            ->where('keterangan', 'like', 'Dari Kedi (Palet %')
+            ->limit($batas)
             ->get();
 
-        if ($rows->isNotEmpty()) {
-            $this->terapkanTurunan($rows);
+        $terisi = 0;
+
+        foreach ($rows as $r) {
+            if (! preg_match('/^Dari Kedi \(Palet (.+?)\)/', (string) $r->keterangan, $m)) {
+                continue;
+            }
+
+            $kandidat = DetailBongkarKedi::where('no_palet', trim($m[1]))
+                ->where('id_ukuran', $r->id_ukuran)
+                ->where('id_jenis_kayu', $r->id_jenis_kayu)
+                ->where('kw', $r->kw)
+                ->where('jumlah', (float) $r->qty)
+                ->get();
+
+            if ($kandidat->count() === 1) {
+                $r->update(['id_detail_bongkar_kedi' => $kandidat->first()->id]);
+                $terisi++;
+            }
         }
+
+        return $terisi;
+    }
+
+    /** id produksi kedi dari palet kedi yang komponennya belum lengkap / belum punya asal. */
+    public function idProduksiKediPerluSinkron(int $batas = 60): array
+    {
+        $idDetail = StokVeneerKering::query()
+            ->where('jenis_transaksi', 'masuk')
+            ->whereNotNull('id_detail_bongkar_kedi')
+            ->where(function ($q) {
+                $q->whereNull('sumber_hpp_basah')
+                    ->orWhere('hpp_veneer_basah_per_m3', '<=', 0)
+                    ->orWhere('hpp_kering_per_m3', '<=', 0);
+            })
+            ->limit(2000)
+            ->pluck('id_detail_bongkar_kedi');
+
+        return DetailBongkarKedi::whereIn('id', $idDetail)
+            ->pluck('id_produksi_kedi')
+            ->filter()->unique()->take($batas)->values()->map(fn ($v) => (int) $v)->all();
     }
 
     /**
-     * Sinkron semua baris masuk non-dryer yang belum punya komponen (dari mana pun asalnya),
-     * lalu hitung ulang ledger produk yang terdampak.
+     * Sumber BUKAN produksi (opname, nota, pilih veneer, repair, dll) yang dulu sempat diisi
+     * komponen turunan dari rata-rata dryer dikembalikan ke kosong. Barisnya lalu memakai
+     * HPP Average stok saat itu (ledger). Baris asli sumber lain tidak pernah punya
+     * ongkos_dryer_per_m3 > 0, jadi hanya baris turunan yang tersentuh.
      *
-     * @return int jumlah baris yang diisi
+     * @return int jumlah baris yang dikembalikan
      */
-    public function sinkronSumberLain(int $batas = 500): int
+    public function bersihkanTurunanLama(int $batas = 500): int
     {
-        $rows = $this->queryMasukNonDryer()
-            ->where('hpp_veneer_basah_per_m3', '<=', 0)
-            ->where('ongkos_dryer_per_m3', '<=', 0)
+        $rows = StokVeneerKering::query()
+            ->where('jenis_transaksi', 'masuk')
+            ->whereNull('id_detail_hasil_dryer')
+            ->whereNull('id_detail_bongkar_kedi')
+            ->where(function ($q) {
+                $q->whereNull('keterangan')->orWhere('keterangan', 'not like', 'Dari Kedi (Palet %');
+            })
+            ->where('ongkos_dryer_per_m3', '>', 0)
             ->limit($batas)
             ->get();
 
@@ -765,13 +1021,29 @@ class HppDryerService
         }
 
         return DB::transaction(function () use ($rows) {
-            $keys = $this->terapkanTurunan($rows);
+            $keys = [];
+
+            foreach ($rows as $r) {
+                $r->update([
+                    'hpp_veneer_basah_per_m3' => 0,
+                    'ongkos_pegawai_per_m3'   => 0,
+                    'ongkos_mesin_per_m3'     => 0,
+                    'ongkos_dryer_per_m3'     => 0,
+                    'hpp_kering_per_m3'       => 0,
+                    'nilai_transaksi'         => 0,
+                    'sumber_hpp_basah'        => null,
+                    'sumber_pegawai'          => null,
+                    'sumber_mesin'            => null,
+                ]);
+
+                $keys[$r->id_ukuran . '|' . $r->id_jenis_kayu . '|' . $r->kw] = [(int) $r->id_ukuran, (int) $r->id_jenis_kayu, (string) $r->kw];
+            }
 
             foreach ($keys as [$u, $j, $kw]) {
                 $this->hitungUlangLedger($u, $j, $kw);
             }
 
-            return count($keys);
+            return $rows->count();
         });
     }
 
@@ -952,5 +1224,18 @@ class HppDryerService
         }
 
         return $m->diffInMinutes($p) / 60;
+    }
+
+    private function angka(float $v, int $desimal = 0): string
+    {
+        return number_format($v, $desimal, ',', '.');
+    }
+
+    /** Jam kerja normal kedi (dari menu Target: KEDI). Bila belum ada, memakai jam normal bawaan. */
+    private function jamNormalKedi(): float
+    {
+        $jam = (float) (Target::where('kode_ukuran', 'KEDI')->value('jam') ?? 0);
+
+        return $jam > 0 ? $jam : (float) self::JAM_NORMAL_DEFAULT;
     }
 }

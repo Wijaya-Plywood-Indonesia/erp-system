@@ -269,7 +269,8 @@
         </table>
 
         @php
-            $hasM3 = collect($items)->contains(fn($item) => $item->m3 !== null);
+            // m3 hanya ditampilkan jika ada item yang dihitung per m3 (hit_kbk = 'm', mis. nota veneer).
+            $hasM3 = collect($items)->contains(fn($item) => ($item->hit_kbk ?? 'b') === 'm' && $item->m3 !== null);
         @endphp
 
         <!-- Table Barang -->
@@ -297,7 +298,7 @@
                         <td class="text-center" style="white-space: nowrap;">{{ $item->satuan === 'lembar' ? 'Lbr' : $item->satuan }}</td>
                         <td class="text-center">{{ number_format($item->qty) }}</td>
                         @if($hasM3)
-                        <td class="text-center" style="white-space: nowrap;">{{ $item->m3 !== null ? number_format($item->m3, 4, ',', '.') : '-' }}</td>
+                        <td class="text-center" style="white-space: nowrap;">{{ ($item->hit_kbk ?? 'b') === 'm' && $item->m3 !== null ? number_format($item->m3, 4, ',', '.') : '-' }}</td>
                         @endif
                         <td class="text-right">{{ number_format($item->harga, 0, ',', '.') }}</td>
                         <td class="text-center">{{ number_format($item->potongan ?? 0, 0, ',', '.') }}</td>

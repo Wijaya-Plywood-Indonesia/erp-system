@@ -145,7 +145,8 @@
             </table>
 
         @php
-            $hasM3 = collect($items)->contains(fn($i) => $i->m3 !== null);
+            // m3 hanya tampil jika perhitungan memakai kubikasi (hit_kbk = 'm'); jika pakai qty, m3 disembunyikan.
+            $hasM3 = collect($items)->contains(fn($i) => ($i->hit_kbk ?? 'b') === 'm' && $i->m3 !== null);
         @endphp
         <table class="items-table">
             <thead>
@@ -167,7 +168,7 @@
                         <td>{{ $item->satuan }}</td>
                         <td>{{ number_format($item->qty) }}</td>
                         @if($hasM3)
-                        <td style="white-space: nowrap;">{{ $item->m3 !== null ? number_format($item->m3, 4, ',', '.') : '-' }}</td>
+                        <td style="white-space: nowrap;">{{ ($item->hit_kbk ?? 'b') === 'm' && $item->m3 !== null ? number_format($item->m3, 4, ',', '.') : '-' }}</td>
                         @endif
                     </tr>
                 @endforeach
@@ -177,7 +178,7 @@
                         <td colspan="3" style="text-align: right; font-weight: bold; padding-right: 15px;">Total</td>
                         <td style="font-weight: bold;">{{ number_format(collect($items)->sum('qty')) }}</td>
                         @if($hasM3)
-                        <td style="font-weight: bold;">{{ number_format(collect($items)->sum('m3'), 4, ',', '.') }}</td>
+                        <td style="font-weight: bold;">{{ number_format(collect($items)->filter(fn($i) => ($i->hit_kbk ?? 'b') === 'm')->sum('m3'), 4, ',', '.') }}</td>
                         @endif
                     </tr>
                 </tfoot>

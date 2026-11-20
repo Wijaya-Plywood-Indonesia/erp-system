@@ -11,9 +11,11 @@ class StokVeneerKering extends Model
     protected $fillable = [
         'id_produksi_dryer',
         'id_detail_hasil_dryer',
+        'id_detail_bongkar_kedi',
         'id_ukuran',
         'id_jenis_kayu',
         'kw',
+        'tipe_mesin',
         'jenis_transaksi',
         'tanggal_transaksi',
         'qty',
@@ -22,6 +24,11 @@ class StokVeneerKering extends Model
         'stok_lembar_sesudah',
         'hpp_veneer_basah_per_m3',
         'ongkos_dryer_per_m3',
+        'ongkos_pegawai_per_m3',
+        'ongkos_mesin_per_m3',
+        'sumber_hpp_basah',
+        'sumber_pegawai',
+        'sumber_mesin',
         'hpp_kering_per_m3',
         'nilai_transaksi',
         'stok_m3_sebelum',
@@ -32,6 +39,7 @@ class StokVeneerKering extends Model
         'keterangan',
         'id_veneer_mutasi',
         'id_veneer_mutasi_detail',
+        'komposisi',
     ];
 
     protected $casts = [
@@ -40,6 +48,8 @@ class StokVeneerKering extends Model
         'm3' => 'decimal:6',
         'hpp_veneer_basah_per_m3' => 'decimal:4',
         'ongkos_dryer_per_m3' => 'decimal:4',
+        'ongkos_pegawai_per_m3' => 'decimal:4',
+        'ongkos_mesin_per_m3' => 'decimal:4',
         'hpp_kering_per_m3' => 'decimal:4',
         'nilai_transaksi' => 'decimal:4',
         'stok_m3_sebelum' => 'decimal:6',
@@ -47,6 +57,7 @@ class StokVeneerKering extends Model
         'stok_m3_sesudah' => 'decimal:6',
         'nilai_stok_sesudah' => 'decimal:4',
         'hpp_average' => 'decimal:4',
+        'komposisi' => 'array',
     ];
 
     // ─── Relasi ──────────────────────────────────────────────────────────────
@@ -67,11 +78,9 @@ class StokVeneerKering extends Model
     }
 
     public function detailHasil()
-{
-    return $this->belongsTo(\App\Models\DetailHasil::class, 'id_detail_hasil_dryer');
-}
-
-    
+    {
+        return $this->belongsTo(\App\Models\DetailHasil::class, 'id_detail_hasil_dryer');
+    }
 
     // ─── Scope ───────────────────────────────────────────────────────────────
 

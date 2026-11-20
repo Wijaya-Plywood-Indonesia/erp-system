@@ -19,7 +19,7 @@ use Filament\Notifications\Notification;
 class TandaiSelesaiAction
 {
     /** Peran yang boleh memakai tombol ini. */
-    public const PERAN = ['super_admin', 'Super Admin'];
+    public const PERAN = ['super_admin', 'Super Admin', 'tandai_selesai_bkbm'];
 
     public static function make(): Action
     {

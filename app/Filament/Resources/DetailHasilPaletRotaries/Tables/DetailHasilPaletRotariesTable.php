@@ -102,7 +102,7 @@ class DetailHasilPaletRotariesTable
             ])
             ->recordActions([
                 Action::make('serah')
-                    ->hidden(fn ($record) => ValidasiOtomatisProduksiService::idTerkunci(ProduksiRotary::class, $record->id_produksi))
+                    ->hidden(fn($record) => ValidasiOtomatisProduksiService::idTerkunci(ProduksiRotary::class, $record->id_produksi))
                     ->label('Serah')
                     ->icon('heroicon-o-paper-airplane')
                     ->color('warning')

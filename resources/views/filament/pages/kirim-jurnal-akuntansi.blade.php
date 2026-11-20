@@ -15,15 +15,19 @@
     </div>
 
     <div class="relative mt-6">
-        {{-- Animasi loading saat ganti tanggal atau saat mengirim --}}
-        <div wire:loading.flex wire:target="tanggal, kirim, kirimMeski"
-            class="absolute inset-0 z-10 items-start justify-center rounded-lg bg-white/70 dark:bg-zinc-900/70 pt-24">
+        {{-- Animasi loading: menempel di tengah layar (fixed) supaya selalu terlihat walau halaman
+             sedang di-scroll, dan berada di atas modal. Aktif saat ganti tanggal, buka rincian (Lihat),
+             dan mengirim. Klik lain tertahan selama proses berjalan. --}}
+        <div wire:loading.flex wire:target="tanggal, lihat, kirim, kirimMeski"
+            class="fixed inset-0 items-center justify-center bg-black/30"
+            style="z-index: 9999;">
             <div
-                class="flex items-center gap-3 rounded-lg bg-white dark:bg-zinc-800 px-5 py-3 shadow border border-zinc-200 dark:border-zinc-700">
-                <x-filament::loading-indicator class="h-6 w-6" />
+                class="flex items-center gap-3 rounded-lg bg-white dark:bg-zinc-800 px-6 py-4 shadow-xl border border-zinc-200 dark:border-zinc-700">
+                <x-filament::loading-indicator class="h-7 w-7" />
                 <span class="text-sm font-medium">
-                    <span wire:loading wire:target="tanggal">Memuat jurnal...</span>
-                    <span wire:loading wire:target="kirim, kirimMeski">Mengirim ke akuntansi...</span>
+                    <span wire:loading wire:target="tanggal">Memuat jurnal tanggal ini...</span>
+                    <span wire:loading wire:target="lihat">Memuat rincian jurnal &amp; ID barang...</span>
+                    <span wire:loading wire:target="kirim, kirimMeski">Mengirim ke akuntansi, mohon tunggu...</span>
                 </span>
             </div>
         </div>

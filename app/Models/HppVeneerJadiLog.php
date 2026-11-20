@@ -3,7 +3,6 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
 
@@ -19,13 +18,17 @@ class HppVeneerJadiLog extends Model
         'kw_grade',
         'tanggal',
         'tipe_transaksi',
+        'jalur',
         'keterangan',
         'referensi_type',
         'referensi_id',
         'total_lembar',
         'total_kubikasi',
+        'hpp_kayu',
         'hpp_pekerja',
+        'hpp_mesin',
         'hpp_bahan_penolong',
+        'hpp_lainnya',
         'hpp_average',
         'nilai_stok',
         'stok_lembar_before',
@@ -34,6 +37,7 @@ class HppVeneerJadiLog extends Model
         'stok_lembar_after',
         'stok_kubikasi_after',
         'nilai_stok_after',
+        'komposisi',
     ];
 
     protected $casts = [
@@ -44,10 +48,12 @@ class HppVeneerJadiLog extends Model
         'hpp_pekerja'          => 'float',
         'hpp_mesin'            => 'float',
         'hpp_bahan_penolong'   => 'float',
+        'hpp_lainnya'          => 'float',
         'hpp_average'          => 'float',
         'nilai_stok'           => 'float',
         'stok_kubikasi_before' => 'float',
         'stok_kubikasi_after'  => 'float',
+        'komposisi'            => 'array',
     ];
 
     public function jenisKayu(): BelongsTo
@@ -59,9 +65,4 @@ class HppVeneerJadiLog extends Model
     {
         return $this->morphTo();
     }
-
-    // public function bahanPenolong(): HasMany
-    // {
-    //     return $this->hasMany(HppVeneerBasahBahanPenolong::class, 'id_log');
-    // }
 }

@@ -37,6 +37,11 @@ class ProductionValidationObserver
         // dipotong DI SINI, saat produksi (Press Dryer / Kedi) divalidasi
         // — BUKAN lagi saat "Terima" dari Gudang Veneer Basah.
         //
+        // REVISI BERIKUTNYA: jumlah yang dipotong diambil dari MODAL / MASUK
+        // produksi (barang veneer basah yang diterima & dipakai produksi),
+        // BUKAN dari HASIL produksi. Stok yang berkurang harus sama dengan
+        // bahan yang benar-benar masuk ke mesin.
+        //
         // Guard anti-potong-ganda: pada event 'updated', kalau field
         // 'status' TIDAK ikut berubah di penyimpanan ini (record memang
         // sudah 'divalidasi' sebelumnya dan cuma disimpan ulang karena
@@ -49,14 +54,14 @@ class ProductionValidationObserver
         }
 
         // ── Press Dryer ──────────────────────────────────────────────
-        // REVISI: potong stok veneer basah berdasarkan HASIL produksi
-        // Press Dryer (detailHasils — output aktual mesin), BUKAN lagi
-        // berdasarkan detailMasuks (input mentah yang diklaim operator).
+        // potong stok veneer basah berdasarkan MODAL / MASUK produksi
+        // Press Dryer (detailMasuks — palet veneer basah yang diterima dari
+        // Gudang Veneer Basah), BUKAN berdasarkan detailHasils (output mesin).
         if (isset($validasi->id_produksi_dryer)) {
             $produksi = $validasi->produksi;
-            $details = $produksi?->detailHasils;
+            $details = $produksi?->detailMasuks;
 
-            Log::info("Memotong Stok Veneer Basah - Press Dryer (berdasarkan hasil produksi). Produksi ID: {$validasi->id_produksi_dryer}");
+            Log::info("Memotong Stok Veneer Basah - Press Dryer (berdasarkan modal/masuk). Produksi ID: {$validasi->id_produksi_dryer}");
 
             if ($details && $details->count() > 0) {
                 $this->inventoryService->kurangiStokDariProduksi(
@@ -66,7 +71,7 @@ class ProductionValidationObserver
                     $produksi->shift ?? null
                 );
             } else {
-                Log::warning("Gagal potong stok: Detail Hasil Press Dryer tidak ditemukan (Produksi ID: {$validasi->id_produksi_dryer}).");
+                Log::warning("Gagal potong stok: Detail Masuk (modal) Press Dryer tidak ditemukan (Produksi ID: {$validasi->id_produksi_dryer}).");
             }
         }
 
@@ -77,14 +82,18 @@ class ProductionValidationObserver
         // dan tipe validasinya SELALU 'bongkar' (lihat ValidasiKediForm,
         // field 'tipe' di-hardcode 'bongkar'). Jadi cuma ada SATU kali
         // validasi per produksi Kedi, dan potong stok di titik itu.
+        //
+        // jumlah yang dipotong diambil dari MODAL / MASUK Kedi
+        // (detailMasukKedi — veneer basah yang dimasukkan ke kedi), BUKAN
+        // dari detailBongkarKedi (hasil bongkar).
         if (isset($validasi->id_produksi_kedi)) {
             $produksi = $validasi->produksi;
-            $details = $produksi?->detailBongkarKedi;
+            $details = $produksi?->detailMasukKedi;
 
-            Log::info("Memotong Stok Veneer Basah - Kedi. Produksi ID: {$validasi->id_produksi_kedi}");
+            Log::info("Memotong Stok Veneer Basah - Kedi (berdasarkan modal/masuk). Produksi ID: {$validasi->id_produksi_kedi}");
 
             if ($details && $details->count() > 0) {
-                // DetailBongkarKedi pakai field 'jumlah' (bukan 'isi'),
+                // DetailMasukKedi pakai field 'jumlah' (bukan 'isi'),
                 // jadi pakai method yang field-nya cocok.
                 $this->inventoryService->kurangiStokDariBongkarKedi(
                     $details,
@@ -92,7 +101,7 @@ class ProductionValidationObserver
                     $produksi->tanggal_actual_bongkar ?? $produksi->tanggal_bongkar ?? $produksi->tanggal
                 );
             } else {
-                Log::warning("Gagal potong stok: Detail Bongkar Kedi tidak ditemukan (Produksi ID: {$validasi->id_produksi_kedi}).");
+                Log::warning("Gagal potong stok: Detail Masuk (modal) Kedi tidak ditemukan (Produksi ID: {$validasi->id_produksi_kedi}).");
             }
         }
 

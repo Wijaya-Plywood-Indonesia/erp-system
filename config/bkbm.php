@@ -33,7 +33,7 @@ return [
     'kategori_bm' => [
         'bm'  => 'BM – Barang Masuk',
         'bmk' => 'BMK – Barang Masuk (Pinjam)',
-        'bml' => 'BML – Barang Kembali dari Luar',
+        'bml' => 'BML – Barang Masuk dari Luar (beli / kembali dari BKL)',
         'bmr' => 'BMR – Barang Kembali (Pinjaman)',
     ],
 

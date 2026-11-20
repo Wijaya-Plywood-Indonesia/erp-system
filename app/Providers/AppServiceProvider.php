@@ -54,9 +54,11 @@ use App\Services\NewRekapAbsensiPegawaiService;
 use App\Services\Payroll\WeeklyRekapPotonganGajiService;
 use App\Services\RekapPotonganGajiService;
 use App\Services\ValidasiOtomatisProduksiService;
+use App\Support\ResolveBarangCache;
 use Filament\Support\Facades\FilamentView;
 use Filament\View\PanelsRenderHook;
 use Illuminate\Support\Facades\Blade;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\HtmlString;
 use Illuminate\Support\ServiceProvider;
 
@@ -163,6 +165,10 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        // Cache + mode lewati untuk pencarian id_barang ke web akuntansi (/api/barang/resolve-*).
+        // Tanpa ini, ringkasan Kirim Jurnal memanggil API akuntansi berkali-kali tiap ganti tanggal.
+        Http::globalMiddleware(ResolveBarangCache::middleware());
+
         // ⬆⬆⬆  WAJIB: supaya MySQL ikut Asia/Jakarta
         HasilSanding::observe(HasilSandingObserver::class);
         ModalSanding::observe(ModalSandingObserver::class);

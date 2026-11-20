@@ -78,7 +78,7 @@ class TempatKayusTable
                 $details = DetailTurusanKayu::whereIn('lahan_id', $lahanIdsTanpaSummary)->get();
 
                 $grouped = $details->groupBy(
-                    fn ($d) => "{$d->lahan_id}_{$d->jenis_kayu_id}_{$d->panjang}"
+                    fn($d) => "{$d->lahan_id}_{$d->jenis_kayu_id}_{$d->panjang}"
                 );
 
                 foreach ($grouped as $rows) {
@@ -259,7 +259,7 @@ class TempatKayusTable
                     'Status Pelunasan' => $statusPelunasan,
                     'Batang' => (int) $rows->sum('kuantitas'),
                     // round-then-sum per item (4 desimal), konsisten dengan NotaKayuController.
-                    'Kubikasi' => (float) $rows->sum(fn ($r) => round($r->kubikasi, 4)),
+                    'Kubikasi' => (float) $rows->sum(fn($r) => round($r->kubikasi, 4)),
                     'Panjang' => $rows->pluck('panjang')->unique()->sort()->implode(', '),
                     'Grade' => $rows->pluck('grade')->unique()->sort()->implode(', '),
                     'is_lunas' => $isLunas,
@@ -296,7 +296,7 @@ class TempatKayusTable
                 $data->push([
                     'ID Kayu' => null,
                     'ID Nota' => null,
-                    'No Nota' => 'OPNAME #'.$log->id,
+                    'No Nota' => 'OPNAME #' . $log->id,
                     'Seri' => 'OPNAME',
                     'Supplier' => $log->keterangan ?? '-',
                     'Status Pelunasan' => null,
@@ -335,13 +335,13 @@ class TempatKayusTable
             return true;
         }
 
-        return $data->every(fn ($row) => $row['is_lunas']);
+        return $data->every(fn($row) => $row['is_lunas']);
     }
 
     private static function seriiBelumLunas(int $lahanId): Collection
     {
         return self::getKayuAktif($lahanId)
-            ->filter(fn ($row) => ! $row['is_lunas'])
+            ->filter(fn($row) => ! $row['is_lunas'])
             ->pluck('Seri')
             ->filter()
             ->values();
@@ -394,9 +394,9 @@ class TempatKayusTable
             ->orderByDesc('id')
             ->get()
             ->groupBy('id_jenis_kayu')
-            ->map(fn ($logs) => $logs->first()) // log terakhir tiap jenis
-            ->filter(fn ($log) => (int) $log->stok_batang_after > 0) // stok harus > 0
-            ->map(fn ($log) => $log->jenisKayu?->nama_kayu)
+            ->map(fn($logs) => $logs->first()) // log terakhir tiap jenis
+            ->filter(fn($log) => (int) $log->stok_batang_after > 0) // stok harus > 0
+            ->map(fn($log) => $log->jenisKayu?->nama_kayu)
             ->filter()
             ->unique()
             ->implode(', ');
@@ -421,6 +421,14 @@ class TempatKayusTable
 
         return $table
             ->paginated(false)
+            // Warna baris (sama seperti BK/BM):
+            //   hijau = lahan masih tersedia (belum diserahkan) -> BOLEH diisi kayu
+            //   merah = lahan penuh (sudah diserahkan / sudah diterima rotary) -> TIDAK BOLEH diisi
+            // Setelah rotary selesai memakai lahan, status di-reset ke 'belum serah' -> hijau lagi.
+            ->header(new \Illuminate\Support\HtmlString('<style>tr.tk-merah { background-color: rgba(239, 68, 68, 0.55) !important; } tr.tk-merah td *:not(.fi-badge):not(.fi-badge *) { color: #1a0000 !important; } tr.tk-hijau { background-color: rgba(22, 163, 74, 0.28) !important; }</style>'))
+            ->recordClasses(fn ($record) => in_array($record->status, ['sudah diserahkan', 'sudah diterima'], true)
+                ? 'tk-merah'
+                : 'tk-hijau')
             ->recordUrl(null)
             ->recordAction('cek_detail')
             ->modifyQueryUsing(function (Builder $query) use ($bisaSerah, $bisaTerima) {
@@ -481,6 +489,17 @@ class TempatKayusTable
                 return $query;
             })
             ->columns([
+                // Kolom status kapasitas lahan: Penuh (sudah diserahkan/diterima) atau Bisa Diisi.
+                TextColumn::make('status_lahan')
+                    ->label('Status Lahan')
+                    ->getStateUsing(fn ($record) => in_array($record->status, ['sudah diserahkan', 'sudah diterima'], true)
+                        ? 'Penuh'
+                        : 'Bisa Diisi')
+                    ->badge()
+                    ->icon(fn ($state) => $state === 'Penuh' ? 'heroicon-o-no-symbol' : 'heroicon-o-check-circle')
+                    ->color(fn ($state) => $state === 'Penuh' ? 'danger' : 'success')
+                    ->alignCenter(),
+
                 TextColumn::make('lahan.kode_lahan')
                     ->label('Lahan')
                     ->sortable(query: function (Builder $query, string $direction) {
@@ -500,12 +519,38 @@ class TempatKayusTable
                         return $query->reorder('hpp_average_summaries.panjang', $direction);
                     })
                     ->badge()
-                    ->color(fn ($state) => $state == 260 ? 'success' : 'info')
+                    ->color(fn($state) => $state == 260 ? 'success' : 'info')
                     ->toggleable(),
 
                 TextColumn::make('jenis_kayu')
                     ->label('Jenis Kayu')
-                    ->getStateUsing(fn ($record) => self::resolveJenisKayu($record))
+                    ->getStateUsing(function ($record) {
+                        $aktif = self::getKayuAktif((int) $record->id_lahan);
+
+                        // Cari data kayu aktif yang panjangnya sesuai group_panjang (fallback ke semua)
+                        $matching = $aktif->where('is_opname', false)->filter(function ($item) use ($record) {
+                            $panjangs = array_map('trim', explode(',', $item['Panjang'] ?? ''));
+
+                            return in_array((string) $record->group_panjang, $panjangs);
+                        });
+
+                        if ($matching->isEmpty()) {
+                            $matching = $aktif->where('is_opname', false);
+                        }
+
+                        $idKayuMasuks = $matching->pluck('ID Kayu')->filter()->unique();
+
+                        if ($idKayuMasuks->isEmpty()) {
+                            return '-';
+                        }
+
+                        $turusan = DetailTurusanKayu::with('jenisKayu')
+                            ->where('lahan_id', $record->id_lahan)
+                            ->whereIn('id_kayu_masuk', $idKayuMasuks)
+                            ->first();
+
+                        return $turusan?->jenisKayu?->nama_kayu ?: '-';
+                    })
                     ->toggleable(),
 
                 TextColumn::make('total_batang_riil')
@@ -526,7 +571,13 @@ class TempatKayusTable
 
                         return number_format((float) $total, 4, '.', ',');
                     })
-                    ->color('primary')
+                    // Baris merah (lahan penuh): pakai warna teks default (gelap) supaya terbaca di atas latar merah.
+                    ->color(fn ($record) => in_array($record->status, ['sudah diserahkan', 'sudah diterima'], true)
+                        ? null
+                        : 'primary')
+                    ->weight(fn ($record) => in_array($record->status, ['sudah diserahkan', 'sudah diterima'], true)
+                        ? 'bold'
+                        : null)
                     ->toggleable(),
 
                 TextColumn::make('diserahkan_oleh')
@@ -551,12 +602,12 @@ class TempatKayusTable
                     })
                     ->label('Status')
                     ->badge()
-                    ->formatStateUsing(fn ($state) => match ($state) {
+                    ->formatStateUsing(fn($state) => match ($state) {
                         'sudah diserahkan' => 'Diserahkan',
                         'sudah diterima' => 'Diterima',
                         default => 'Belum Diserahkan',
                     })
-                    ->color(fn ($state) => match ($state) {
+                    ->color(fn($state) => match ($state) {
                         'sudah diterima' => 'success',
                         'sudah diserahkan' => 'warning',
                         default => 'gray',
@@ -570,12 +621,12 @@ class TempatKayusTable
                     ->trueLabel('Sudah Diserahkan')
                     ->falseLabel('Belum Diserahkan')
                     ->queries(
-                        true: fn (Builder $query) => $query->where('tempat_kayus.status', 'sudah diserahkan'),
-                        false: fn (Builder $query) => $query->where(function ($q) {
+                        true: fn(Builder $query) => $query->where('tempat_kayus.status', 'sudah diserahkan'),
+                        false: fn(Builder $query) => $query->where(function ($q) {
                             $q->whereNull('tempat_kayus.status')
                                 ->orWhere('tempat_kayus.status', '!=', 'sudah diserahkan');
                         }),
-                        blank: fn (Builder $query) => $query,
+                        blank: fn(Builder $query) => $query,
                     ),
             ], layout: FiltersLayout::AboveContent)
             ->filtersFormColumns(1)
@@ -621,28 +672,28 @@ class TempatKayusTable
                             ->where('referensi_type', NotaKayu::class)
                             ->with('referensi.kayuMasuk')
                             ->get()
-                            ->map(fn ($log) => (string) ($log->referensi?->kayuMasuk?->seri ?? null))
+                            ->map(fn($log) => (string) ($log->referensi?->kayuMasuk?->seri ?? null))
                             ->filter()
                             ->unique()
                             ->values();
 
                         $belumLunas = NotaKayu::whereHas(
                             'kayuMasuk',
-                            fn ($q) => $q->whereIn('seri', $semuaSeri)
+                            fn($q) => $q->whereIn('seri', $semuaSeri)
                         )
                             ->with('kayuMasuk')
                             ->get()
-                            ->groupBy(fn ($nota) => (string) $nota->kayuMasuk?->seri)
-                            ->map(fn ($group) => $group->sortByDesc('id')->first())
+                            ->groupBy(fn($nota) => (string) $nota->kayuMasuk?->seri)
+                            ->map(fn($group) => $group->sortByDesc('id')->first())
                             ->filter(
-                                fn ($nota) => ! str_starts_with(strtolower(trim($nota->status_pelunasan ?? '')), 'lunas')
+                                fn($nota) => ! str_starts_with(strtolower(trim($nota->status_pelunasan ?? '')), 'lunas')
                             )
-                            ->map(fn ($nota) => (string) $nota->kayuMasuk?->seri)
+                            ->map(fn($nota) => (string) $nota->kayuMasuk?->seri)
                             ->filter()
                             ->values();
 
                         if ($belumLunas->isNotEmpty()) {
-                            return '⚠️ Seri berikut belum lunas: '.$belumLunas->implode(', ').'. Tidak dapat diserahkan.';
+                            return '⚠️ Seri berikut belum lunas: ' . $belumLunas->implode(', ') . '. Tidak dapat diserahkan.';
                         }
 
                         return "Kayu dari lahan {$record->lahan?->kode_lahan} akan diserahkan ke rotary. Semua seri sudah lunas.";
@@ -691,7 +742,7 @@ class TempatKayusTable
                         if ($belumLunas->isNotEmpty()) {
                             Notification::make()
                                 ->title('Tidak dapat diserahkan!')
-                                ->body('Seri '.$belumLunas->implode(', ').' belum lunas. Selesaikan pembayaran terlebih dahulu.')
+                                ->body('Seri ' . $belumLunas->implode(', ') . ' belum lunas. Selesaikan pembayaran terlebih dahulu.')
                                 ->danger()
                                 ->persistent()
                                 ->send();
@@ -785,8 +836,8 @@ class TempatKayusTable
                     ->requiresConfirmation()
                     ->modalHeading('Terima Kayu dari Grader?')
                     ->modalDescription(
-                        fn ($record) => "Kayu dari lahan {$record->lahan?->kode_lahan} akan diterima atas nama ".
-                            Auth::user()->name.'.'
+                        fn($record) => "Kayu dari lahan {$record->lahan?->kode_lahan} akan diterima atas nama " .
+                            Auth::user()->name . '.'
                     )
                     ->modalSubmitActionLabel('Ya, Terima')
                     ->visible(function ($record) use ($bisaTerima) {
@@ -845,7 +896,7 @@ class TempatKayusTable
                     ->requiresConfirmation()
                     ->modalHeading('Batalkan Serah Kayu?')
                     ->modalDescription(
-                        fn ($record) => "Status lahan {$record->lahan?->kode_lahan} akan dikembalikan menjadi Belum Diserahkan."
+                        fn($record) => "Status lahan {$record->lahan?->kode_lahan} akan dikembalikan menjadi Belum Diserahkan."
                     )
                     ->modalSubmitActionLabel('Ya, Batalkan')
                     ->visible(function ($record) use ($isAdmin) {
