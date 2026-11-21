@@ -57,7 +57,9 @@
                             </div>
                         </div>
                         <div class="text-right shrink-0">
-                            <div class="text-sm font-black text-gray-900 dark:text-white">Rp {{ number_format($nota->total, 0, ',', '.') }}</div>
+                            @if ($canSeePrice)
+                                <div class="text-sm font-black text-gray-900 dark:text-white">Rp {{ number_format($nota->total, 0, ',', '.') }}</div>
+                            @endif
                             <div class="text-[10px] font-bold {{ $nota->pernah_diretur ? 'text-amber-500' : 'text-emerald-500' }}">
                                 {{ $nota->is_retur_habis ? 'Habis diretur' : ($nota->pernah_diretur ? 'Sebagian diretur' : 'Belum diretur') }}
                             </div>
@@ -89,10 +91,12 @@
                     <span class="text-[11px] font-bold text-primary-600 shrink-0">Detail ▾</span>
                 </summary>
                 <div class="px-4 pb-4 pt-2 grid grid-cols-2 gap-3 text-xs border-t border-gray-100 dark:border-gray-800">
-                    <div>
-                        <span class="text-[10px] text-gray-400 font-bold uppercase block">Total Belanja</span>
-                        <span class="font-black text-gray-900 dark:text-white">Rp {{ number_format($selectedNota->total, 0, ',', '.') }}</span>
-                    </div>
+                    @if ($canSeePrice)
+                        <div>
+                            <span class="text-[10px] text-gray-400 font-bold uppercase block">Total Belanja</span>
+                            <span class="font-black text-gray-900 dark:text-white">Rp {{ number_format($selectedNota->total, 0, ',', '.') }}</span>
+                        </div>
+                    @endif
                     <div>
                         <span class="text-[10px] text-gray-400 font-bold uppercase block">Metode Bayar</span>
                         <span class="font-bold text-gray-700 dark:text-gray-300">{{ $selectedNota->metode_pembayaran ?? '-' }}</span>
@@ -172,7 +176,9 @@
                                         @else
                                             <span class="text-[10px] text-gray-400">
                                                 Sisa {{ $item['sisa_qty'] }} {{ $item['satuan'] }}
-                                                &bull; Rp {{ number_format($item['harga'], 0, ',', '.') }}
+                                                @if ($canSeePrice)
+                                                    &bull; Rp {{ number_format($item['harga'], 0, ',', '.') }}
+                                                @endif
                                                 @if ($isM3) &bull; <span class="text-blue-500 font-bold">M3</span> @endif
                                             </span>
                                         @endif
@@ -180,7 +186,7 @@
                                 </div>
                             </div>
 
-                            @if ($isAvailable)
+                            @if ($isAvailable && $canSeePrice)
                                 <div class="text-right shrink-0">
                                     <div class="text-xs font-black text-gray-900 dark:text-white">
                                         Rp {{ number_format($item['subtotal'] ?? 0, 0, ',', '.') }}
@@ -222,12 +228,18 @@
                 {{-- Total --}}
                 <div class="flex items-center justify-between">
                     <div>
-                        <span class="text-sm font-bold text-gray-800 dark:text-gray-200">Total Dikembalikan</span>
+                        <span class="text-sm font-bold text-gray-800 dark:text-gray-200">
+                            {{ $canSeePrice ? 'Total Dikembalikan' : 'Jumlah Barang Diretur' }}
+                        </span>
                         @if ($ringkasan['jumlah_item'] > 0)
                             <span class="ml-1.5 text-[11px] font-semibold text-gray-400">({{ $ringkasan['jumlah_item'] }} item)</span>
                         @endif
                     </div>
-                    <span class="text-xl font-black text-primary-600 dark:text-primary-400">Rp {{ number_format($ringkasan['total'], 0, ',', '.') }}</span>
+                    @if ($canSeePrice)
+                        <span class="text-xl font-black text-primary-600 dark:text-primary-400">Rp {{ number_format($ringkasan['total'], 0, ',', '.') }}</span>
+                    @else
+                        <span class="text-sm font-black text-primary-600 dark:text-primary-400">{{ $ringkasan['jumlah_item'] }} Item Dipilih</span>
+                    @endif
                 </div>
 
                 @if ($ringkasan['jumlah_item'] > 0)
@@ -237,7 +249,11 @@
                             @if (($item['selected'] ?? false) && ($item['qty_retur'] ?? 0) > 0)
                                 <div class="flex justify-between text-gray-600 dark:text-gray-400">
                                     <span class="truncate max-w-[55%]">{{ $item['nama_barang'] }} &times; {{ $item['qty_retur'] }} {{ $item['satuan'] }}</span>
-                                    <span class="font-semibold text-gray-900 dark:text-white">Rp {{ number_format($item['subtotal'], 0, ',', '.') }}</span>
+                                    @if ($canSeePrice)
+                                        <span class="font-semibold text-gray-900 dark:text-white">Rp {{ number_format($item['subtotal'], 0, ',', '.') }}</span>
+                                    @else
+                                        <span class="font-semibold text-emerald-600 dark:text-emerald-400">Siap Diretur</span>
+                                    @endif
                                 </div>
                             @endif
                         @endforeach
@@ -261,7 +277,7 @@
                 <button type="button" wire:click="simpanRetur"
                     wire:confirm="Simpan perubahan retur ini? Anda perlu validasi ulang setelahnya untuk dikirim ke Akuntansi."
                     wire:loading.attr="disabled" wire:target="simpanRetur"
-                    @if ($ringkasan['total'] <= 0 || trim($keterangan_retur) === '') disabled @endif
+                    @if ($ringkasan['jumlah_item'] <= 0 || trim($keterangan_retur) === '') disabled @endif
                     class="w-full py-3.5 rounded-xl bg-primary-600 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-black shadow-md flex items-center justify-center gap-2">
                     <span wire:loading.remove wire:target="simpanRetur" class="flex items-center gap-2">
                         <x-heroicon-o-check-circle class="w-5 h-5" /> {{ $editingRetur ? 'Simpan Perubahan Retur' : 'Simpan Retur (Draft)' }}
@@ -275,7 +291,7 @@
                     </span>
                 </button>
 
-                @if ($ringkasan['total'] <= 0)
+                @if ($ringkasan['jumlah_item'] <= 0)
                     <p class="text-[11px] text-center text-gray-400">Pilih barang di atas dulu</p>
                 @elseif (trim($keterangan_retur) === '')
                     <p class="text-[11px] text-center text-red-400">Isi alasan retur dulu</p>
@@ -289,8 +305,12 @@
         @php $ringkasan = $this->ringkasan; @endphp
         <div class="fixed bottom-0 inset-x-0 z-40 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800 px-4 py-3 flex items-center justify-between gap-3 shadow-[0_-4px_12px_rgba(0,0,0,0.06)] sm:hidden">
             <div>
-                <div class="text-[10px] text-gray-400 font-bold uppercase">Total Retur</div>
-                <div class="text-base font-black text-primary-600 dark:text-primary-400">Rp {{ number_format($ringkasan['total'], 0, ',', '.') }}</div>
+                <div class="text-[10px] text-gray-400 font-bold uppercase">{{ $canSeePrice ? 'Total Retur' : 'Jumlah Barang' }}</div>
+                @if ($canSeePrice)
+                    <div class="text-base font-black text-primary-600 dark:text-primary-400">Rp {{ number_format($ringkasan['total'], 0, ',', '.') }}</div>
+                @else
+                    <div class="text-base font-black text-primary-600 dark:text-primary-400">{{ $ringkasan['jumlah_item'] }} Item</div>
+                @endif
             </div>
             <a href="#ringkasan-retur"
                 class="px-4 py-2.5 rounded-xl bg-primary-600 text-white text-xs font-black">Simpan ↓</a>

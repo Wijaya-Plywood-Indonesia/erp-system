@@ -17,6 +17,8 @@ class ReturPenjualansTable
 {
     public static function configure(Table $table): Table
     {
+        $isKantor = (bool) auth()->user()?->hasAnyRole(['edmeros', 'super_admin', 'Super Admin']);
+
         return $table
             ->columns([
                 TextColumn::make('tanggal')
@@ -54,7 +56,8 @@ class ReturPenjualansTable
                     ->label('Total Retur')
                     ->money('IDR')
                     ->sortable()
-                    ->alignRight(),
+                    ->alignRight()
+                    ->visible($isKantor),
 
                 TextColumn::make('status_retur')
                     ->label('Status')

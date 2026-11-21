@@ -49,10 +49,13 @@ class FormReturPenjualan extends Page
 
     public string $tanggal = '';
 
+    public bool $canSeePrice = false;
+
     // ── LIFECYCLE ───────────────────────────────────────────────────────────
 
     public function mount(): void
     {
+        $this->canSeePrice = (bool) auth()->user()?->hasAnyRole(['edmeros', 'super_admin', 'Super Admin']);
         $this->tanggal = now()->format('Y-m-d');
 
         if ($this->returId) {
