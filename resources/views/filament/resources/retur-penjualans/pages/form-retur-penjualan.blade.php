@@ -4,7 +4,7 @@
         {{-- HEADER --}}
         <div class="flex items-center justify-between">
             <div class="flex items-center gap-2">
-                @if ($selectedNota)
+                @if ($selectedNota && !$editingRetur)
                     <button type="button" wire:click="batalPilihNota"
                         class="p-2 rounded-xl bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 text-gray-600 dark:text-gray-300 shrink-0">
                         <x-heroicon-o-arrow-left class="w-5 h-5" />
@@ -15,10 +15,14 @@
                         <x-heroicon-o-arrow-left class="w-5 h-5" />
                     </a>
                 @endif
-                <h1 class="text-base font-black text-gray-900 dark:text-white">Retur Penjualan</h1>
+                <div>
+                    <h1 class="text-base font-black text-gray-900 dark:text-white">
+                        {{ $editingRetur ? 'Edit Retur Penjualan (' . $editingRetur->no_retur . ')' : 'Retur Penjualan' }}
+                    </h1>
+                </div>
             </div>
             <span class="text-xs font-bold text-gray-400">
-                {{ $selectedNota ? 'Langkah 2/2' : 'Langkah 1/2' }}
+                {{ $editingRetur ? 'Mode Edit' : ($selectedNota ? 'Langkah 2/2' : 'Langkah 1/2') }}
             </span>
         </div>
 
@@ -53,7 +57,9 @@
                             </div>
                         </div>
                         <div class="text-right shrink-0">
-                            <div class="text-sm font-black text-gray-900 dark:text-white">Rp {{ number_format($nota->total, 0, ',', '.') }}</div>
+                            @if ($canSeePrice)
+                                <div class="text-sm font-black text-gray-900 dark:text-white">Rp {{ number_format($nota->total, 0, ',', '.') }}</div>
+                            @endif
                             <div class="text-[10px] font-bold {{ $nota->pernah_diretur ? 'text-amber-500' : 'text-emerald-500' }}">
                                 {{ $nota->is_retur_habis ? 'Habis diretur' : ($nota->pernah_diretur ? 'Sebagian diretur' : 'Belum diretur') }}
                             </div>
@@ -85,10 +91,12 @@
                     <span class="text-[11px] font-bold text-primary-600 shrink-0">Detail ▾</span>
                 </summary>
                 <div class="px-4 pb-4 pt-2 grid grid-cols-2 gap-3 text-xs border-t border-gray-100 dark:border-gray-800">
-                    <div>
-                        <span class="text-[10px] text-gray-400 font-bold uppercase block">Total Belanja</span>
-                        <span class="font-black text-gray-900 dark:text-white">Rp {{ number_format($selectedNota->total, 0, ',', '.') }}</span>
-                    </div>
+                    @if ($canSeePrice)
+                        <div>
+                            <span class="text-[10px] text-gray-400 font-bold uppercase block">Total Belanja</span>
+                            <span class="font-black text-gray-900 dark:text-white">Rp {{ number_format($selectedNota->total, 0, ',', '.') }}</span>
+                        </div>
+                    @endif
                     <div>
                         <span class="text-[10px] text-gray-400 font-bold uppercase block">Metode Bayar</span>
                         <span class="font-bold text-gray-700 dark:text-gray-300">{{ $selectedNota->metode_pembayaran ?? '-' }}</span>
@@ -124,7 +132,8 @@
             <div class="flex flex-col gap-2">
                 @foreach ($items as $index => $item)
                     @php
-                        $isAvailable = ($item['sisa_qty'] ?? 0) > 0;
+                        $isVeneer    = $item['is_veneer'] ?? false;
+                        $isAvailable = !$isVeneer && ($item['sisa_qty'] ?? 0) > 0;
                         $isSelected  = $item['selected'] ?? false;
                         $isM3        = ($item['hit_kbk'] ?? 'b') === 'm';
                     @endphp
@@ -149,27 +158,35 @@
 
                             {{-- Info Barang --}}
                             <div class="min-w-0 flex-1">
-                                <div class="text-sm font-bold truncate {{ !$isAvailable ? 'line-through text-gray-400' : 'text-gray-900 dark:text-white' }}">
+                                <div class="text-sm font-bold truncate {{ !$isAvailable ? ($isVeneer ? 'text-gray-400' : 'line-through text-gray-400') : 'text-gray-900 dark:text-white' }}">
                                     {{ $item['nama_barang'] }}
                                 </div>
                                 <div class="flex items-center gap-1.5 flex-wrap mt-0.5">
-                                    <span class="text-[10px] font-bold px-1.5 py-0.5 rounded
-                                        {{ $item['qty_teretur'] > 0 ? 'bg-amber-50 text-amber-600 dark:bg-amber-950/40 dark:text-amber-400' : 'bg-gray-50 text-gray-400 dark:bg-gray-800' }}">
-                                        Diretur {{ $item['qty_teretur'] }}/{{ $item['qty_beli'] }} {{ $item['satuan'] }}
-                                    </span>
-                                    @if (!$isAvailable)
-                                        <span class="text-[10px] font-bold text-red-500">Sudah habis diretur</span>
-                                    @else
-                                        <span class="text-[10px] text-gray-400">
-                                            Sisa {{ $item['sisa_qty'] }} {{ $item['satuan'] }}
-                                            &bull; Rp {{ number_format($item['harga'], 0, ',', '.') }}
-                                            @if ($isM3) &bull; <span class="text-blue-500 font-bold">M3</span> @endif
+                                    @if ($isVeneer)
+                                        <span class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-red-100 text-red-600 dark:bg-red-950/40 dark:text-red-400">
+                                            Tidak Boleh Diretur (Veneer)
                                         </span>
+                                    @else
+                                        <span class="text-[10px] font-bold px-1.5 py-0.5 rounded
+                                            {{ $item['qty_teretur'] > 0 ? 'bg-amber-50 text-amber-600 dark:bg-amber-950/40 dark:text-amber-400' : 'bg-gray-50 text-gray-400 dark:bg-gray-800' }}">
+                                            Diretur {{ $item['qty_teretur'] }}/{{ $item['qty_beli'] }} {{ $item['satuan'] }}
+                                        </span>
+                                        @if (!$isAvailable)
+                                            <span class="text-[10px] font-bold text-red-500">Sudah habis diretur</span>
+                                        @else
+                                            <span class="text-[10px] text-gray-400">
+                                                Sisa {{ $item['sisa_qty'] }} {{ $item['satuan'] }}
+                                                @if ($canSeePrice)
+                                                    &bull; Rp {{ number_format($item['harga'], 0, ',', '.') }}
+                                                @endif
+                                                @if ($isM3) &bull; <span class="text-blue-500 font-bold">M3</span> @endif
+                                            </span>
+                                        @endif
                                     @endif
                                 </div>
                             </div>
 
-                            @if ($isAvailable)
+                            @if ($isAvailable && $canSeePrice)
                                 <div class="text-right shrink-0">
                                     <div class="text-xs font-black text-gray-900 dark:text-white">
                                         Rp {{ number_format($item['subtotal'] ?? 0, 0, ',', '.') }}
@@ -211,12 +228,18 @@
                 {{-- Total --}}
                 <div class="flex items-center justify-between">
                     <div>
-                        <span class="text-sm font-bold text-gray-800 dark:text-gray-200">Total Dikembalikan</span>
+                        <span class="text-sm font-bold text-gray-800 dark:text-gray-200">
+                            {{ $canSeePrice ? 'Total Dikembalikan' : 'Jumlah Barang Diretur' }}
+                        </span>
                         @if ($ringkasan['jumlah_item'] > 0)
                             <span class="ml-1.5 text-[11px] font-semibold text-gray-400">({{ $ringkasan['jumlah_item'] }} item)</span>
                         @endif
                     </div>
-                    <span class="text-xl font-black text-primary-600 dark:text-primary-400">Rp {{ number_format($ringkasan['total'], 0, ',', '.') }}</span>
+                    @if ($canSeePrice)
+                        <span class="text-xl font-black text-primary-600 dark:text-primary-400">Rp {{ number_format($ringkasan['total'], 0, ',', '.') }}</span>
+                    @else
+                        <span class="text-sm font-black text-primary-600 dark:text-primary-400">{{ $ringkasan['jumlah_item'] }} Item Dipilih</span>
+                    @endif
                 </div>
 
                 @if ($ringkasan['jumlah_item'] > 0)
@@ -226,7 +249,11 @@
                             @if (($item['selected'] ?? false) && ($item['qty_retur'] ?? 0) > 0)
                                 <div class="flex justify-between text-gray-600 dark:text-gray-400">
                                     <span class="truncate max-w-[55%]">{{ $item['nama_barang'] }} &times; {{ $item['qty_retur'] }} {{ $item['satuan'] }}</span>
-                                    <span class="font-semibold text-gray-900 dark:text-white">Rp {{ number_format($item['subtotal'], 0, ',', '.') }}</span>
+                                    @if ($canSeePrice)
+                                        <span class="font-semibold text-gray-900 dark:text-white">Rp {{ number_format($item['subtotal'], 0, ',', '.') }}</span>
+                                    @else
+                                        <span class="font-semibold text-emerald-600 dark:text-emerald-400">Siap Diretur</span>
+                                    @endif
                                 </div>
                             @endif
                         @endforeach
@@ -248,12 +275,12 @@
 
                 {{-- Tombol Simpan --}}
                 <button type="button" wire:click="simpanRetur"
-                    wire:confirm="Simpan retur ini sebagai draft? Anda perlu validasi setelahnya untuk dikirim ke Akuntansi."
+                    wire:confirm="Simpan perubahan retur ini? Anda perlu validasi ulang setelahnya untuk dikirim ke Akuntansi."
                     wire:loading.attr="disabled" wire:target="simpanRetur"
-                    @if ($ringkasan['total'] <= 0 || trim($keterangan_retur) === '') disabled @endif
+                    @if ($ringkasan['jumlah_item'] <= 0 || trim($keterangan_retur) === '') disabled @endif
                     class="w-full py-3.5 rounded-xl bg-primary-600 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-black shadow-md flex items-center justify-center gap-2">
                     <span wire:loading.remove wire:target="simpanRetur" class="flex items-center gap-2">
-                        <x-heroicon-o-check-circle class="w-5 h-5" /> Simpan Retur (Draft)
+                        <x-heroicon-o-check-circle class="w-5 h-5" /> {{ $editingRetur ? 'Simpan Perubahan Retur' : 'Simpan Retur (Draft)' }}
                     </span>
                     <span wire:loading wire:target="simpanRetur" class="flex items-center gap-2">
                         <svg class="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none">
@@ -264,7 +291,7 @@
                     </span>
                 </button>
 
-                @if ($ringkasan['total'] <= 0)
+                @if ($ringkasan['jumlah_item'] <= 0)
                     <p class="text-[11px] text-center text-gray-400">Pilih barang di atas dulu</p>
                 @elseif (trim($keterangan_retur) === '')
                     <p class="text-[11px] text-center text-red-400">Isi alasan retur dulu</p>
@@ -278,8 +305,12 @@
         @php $ringkasan = $this->ringkasan; @endphp
         <div class="fixed bottom-0 inset-x-0 z-40 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800 px-4 py-3 flex items-center justify-between gap-3 shadow-[0_-4px_12px_rgba(0,0,0,0.06)] sm:hidden">
             <div>
-                <div class="text-[10px] text-gray-400 font-bold uppercase">Total Retur</div>
-                <div class="text-base font-black text-primary-600 dark:text-primary-400">Rp {{ number_format($ringkasan['total'], 0, ',', '.') }}</div>
+                <div class="text-[10px] text-gray-400 font-bold uppercase">{{ $canSeePrice ? 'Total Retur' : 'Jumlah Barang' }}</div>
+                @if ($canSeePrice)
+                    <div class="text-base font-black text-primary-600 dark:text-primary-400">Rp {{ number_format($ringkasan['total'], 0, ',', '.') }}</div>
+                @else
+                    <div class="text-base font-black text-primary-600 dark:text-primary-400">{{ $ringkasan['jumlah_item'] }} Item</div>
+                @endif
             </div>
             <a href="#ringkasan-retur"
                 class="px-4 py-2.5 rounded-xl bg-primary-600 text-white text-xs font-black">Simpan ↓</a>

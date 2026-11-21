@@ -15,6 +15,8 @@ class PenjualansTable
 {
     public static function configure(Table $table): Table
     {
+        $isKantor = (bool) auth()->user()?->hasAnyRole(['edmeros', 'super_admin', 'Super Admin']);
+
         return $table
             ->columns([
                 TextColumn::make('tanggal')
@@ -44,9 +46,10 @@ class PenjualansTable
 
                 TextColumn::make('total')
                     ->label('Total Penjualan')
-                    ->money('IDR')
+                    ->formatStateUsing(fn ($state) => $state !== null ? 'Rp ' . \App\Http\Controllers\PenjualanCetakController::formatRupiah($state) : null)
                     ->sortable()
-                    ->alignRight(),
+                    ->alignRight()
+                    ->visible($isKantor),
 
                 TextColumn::make('status_sync_akuntansi')
                     ->label('Sync Akuntansi')

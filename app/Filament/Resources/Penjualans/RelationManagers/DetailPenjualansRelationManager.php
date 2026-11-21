@@ -298,7 +298,7 @@ class DetailPenjualansRelationManager extends RelationManager
                     ->label('Subtotal (Rp)')
                     ->numeric()
                     ->prefix('Rp')
-                    ->disabled()
+                    ->helperText('Otomatis dihitung, atau ketik langsung jika ingin presisi desimal tertentu')
                     ->dehydrated()
                     ->visible(fn () => self::isKantor()),
 
@@ -333,16 +333,17 @@ class DetailPenjualansRelationManager extends RelationManager
         }
     }
 
-    protected static function recalculateSubtotal(Set|callable $set, Get|callable $get): void
+    protected static function recalculateSubtotal(Set|callable $set, Get|callable $get, ?RelationManager $livewire = null): void
     {
         $qty = (float) ($get('jumlah') ?? 0);
         $harga = (float) ($get('harga') ?? 0);
         $potongan = (float) ($get('potongan') ?? 0);
         $hitKbk = $get('hit_kbk') ?: 'b';
         $m3 = $get('custom_m3') !== null && $get('custom_m3') !== '' ? (float) $get('custom_m3') : null;
+        $pakaiPpn = (bool) ($livewire?->ownerRecord?->pakai_ppn ?? true);
 
-        $base = ($hitKbk === 'm' && $m3 !== null) ? ($m3 * $harga) : ($qty * $harga);
-        $set('subtotal', max(0, $base - ($qty * $potongan)));
+        $subtotal = \App\Http\Controllers\PenjualanCetakController::calculateItemSubtotal($qty, $harga, $potongan, $m3, $hitKbk, 11.0, $pakaiPpn);
+        $set('subtotal', $subtotal);
     }
 
     public static function autoGenerateNama(Set|callable $set, Get|callable $get): void
@@ -451,18 +452,18 @@ class DetailPenjualansRelationManager extends RelationManager
                     ->visible(fn () => self::isKantor()),
                 TextColumn::make('harga')
                     ->label('Harga (Kantor)')
-                    ->money('IDR')
+                    ->formatStateUsing(fn ($state) => $state !== null ? 'Rp ' . \App\Http\Controllers\PenjualanCetakController::formatRupiah($state) : null)
                     ->alignRight()
                     ->placeholder('Belum diisi')
                     ->visible(fn () => self::isKantor()),
                 TextColumn::make('potongan')
                     ->label('Pot/pcs')
-                    ->money('IDR')
+                    ->formatStateUsing(fn ($state) => $state !== null ? 'Rp ' . \App\Http\Controllers\PenjualanCetakController::formatRupiah($state) : null)
                     ->alignRight()
                     ->visible(fn () => self::isKantor()),
                 TextColumn::make('subtotal')
                     ->label('Subtotal')
-                    ->money('IDR')
+                    ->formatStateUsing(fn ($state) => $state !== null ? 'Rp ' . \App\Http\Controllers\PenjualanCetakController::formatRupiah($state) : null)
                     ->alignRight()
                     ->visible(fn () => self::isKantor()),
                 TextColumn::make('keterangan')
@@ -473,15 +474,19 @@ class DetailPenjualansRelationManager extends RelationManager
             ->headerActions([
                 CreateAction::make()
                     ->label('Tambah Barang')
-                    ->mutateFormDataUsing(function (array $data): array {
-                        $qty = (float) ($data['jumlah'] ?? 0);
-                        $harga = (float) ($data['harga'] ?? 0);
-                        $potongan = (float) ($data['potongan'] ?? 0);
-                        $hitKbk = $data['hit_kbk'] ?? 'b';
-                        $m3 = isset($data['custom_m3']) && $data['custom_m3'] !== null ? (float) $data['custom_m3'] : null;
+                    ->mutateFormDataUsing(function (array $data, RelationManager $livewire): array {
+                        if (isset($data['subtotal']) && filled($data['subtotal'])) {
+                            $data['subtotal'] = (float) $data['subtotal'];
+                        } else {
+                            $qty = (float) ($data['jumlah'] ?? 0);
+                            $harga = (float) ($data['harga'] ?? 0);
+                            $potongan = (float) ($data['potongan'] ?? 0);
+                            $hitKbk = $data['hit_kbk'] ?? 'b';
+                            $m3 = isset($data['custom_m3']) && $data['custom_m3'] !== null ? (float) $data['custom_m3'] : null;
+                            $pakaiPpn = (bool) ($livewire->ownerRecord->pakai_ppn ?? false);
 
-                        $base = ($hitKbk === 'm' && $m3 !== null) ? ($m3 * $harga) : ($qty * $harga);
-                        $data['subtotal'] = max(0, $base - ($qty * $potongan));
+                            $data['subtotal'] = \App\Http\Controllers\PenjualanCetakController::calculateItemSubtotal($qty, $harga, $potongan, $m3, $hitKbk, 11.0, $pakaiPpn);
+                        }
                         return $data;
                     }),
 
@@ -549,15 +554,19 @@ class DetailPenjualansRelationManager extends RelationManager
             ])
             ->actions([
                 EditAction::make()
-                    ->mutateFormDataUsing(function (array $data): array {
-                        $qty = (float) ($data['jumlah'] ?? 0);
-                        $harga = (float) ($data['harga'] ?? 0);
-                        $potongan = (float) ($data['potongan'] ?? 0);
-                        $hitKbk = $data['hit_kbk'] ?? 'b';
-                        $m3 = isset($data['custom_m3']) && $data['custom_m3'] !== null ? (float) $data['custom_m3'] : null;
+                    ->mutateFormDataUsing(function (array $data, RelationManager $livewire): array {
+                        if (isset($data['subtotal']) && filled($data['subtotal'])) {
+                            $data['subtotal'] = (float) $data['subtotal'];
+                        } else {
+                            $qty = (float) ($data['jumlah'] ?? 0);
+                            $harga = (float) ($data['harga'] ?? 0);
+                            $potongan = (float) ($data['potongan'] ?? 0);
+                            $hitKbk = $data['hit_kbk'] ?? 'b';
+                            $m3 = isset($data['custom_m3']) && $data['custom_m3'] !== null ? (float) $data['custom_m3'] : null;
+                            $pakaiPpn = (bool) ($livewire->ownerRecord->pakai_ppn ?? false);
 
-                        $base = ($hitKbk === 'm' && $m3 !== null) ? ($m3 * $harga) : ($qty * $harga);
-                        $data['subtotal'] = max(0, $base - ($qty * $potongan));
+                            $data['subtotal'] = \App\Http\Controllers\PenjualanCetakController::calculateItemSubtotal($qty, $harga, $potongan, $m3, $hitKbk, 11.0, $pakaiPpn);
+                        }
                         return $data;
                     }),
                 DeleteAction::make(),

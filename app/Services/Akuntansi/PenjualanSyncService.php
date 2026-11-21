@@ -53,7 +53,15 @@ class PenjualanSyncService
             ];
         }
 
-        $metodePembayaran = $record->metode_pembayaran ?: 'Tunai';
+        // Metode pembayaran ERP (Tunai / Transfer / Cek / Giro) → normalize ke TUNAI atau TRANSFER
+        // untuk dikirim ke web Akuntansi yang hanya mengenal TUNAI / TRANSFER.
+        $rawMetode = strtolower(trim($record->metode_pembayaran ?? ''));
+        if (str_contains($rawMetode, 'transfer')) {
+            $metodePembayaran = 'TRANSFER';
+        } else {
+            // Tunai, Cek / Giro, atau apapun selain transfer → TUNAI
+            $metodePembayaran = 'TUNAI';
+        }
 
         $ppnPersen = (float) ($record->ppn_persen ?? 0);
         $ppnNominal = (float) ($record->ppn_nominal ?? 0);
@@ -63,13 +71,18 @@ class PenjualanSyncService
         $ongkir = (float) ($record->ongkir ?? 0);
         $totalAkhir = (float) ($record->total > 0 ? $record->total : ($grandTotal + $ppnNominal + $ongkir));
 
+        // Semua penjualan dari ERP masuk sebagai COD ke Akuntansi:
+        // - metode_pembayaran di ERP hanya menentukan DI MANA nantinya uang dibayarkan
+        //   (tunai / transfer), tapi belum berarti uang sudah diterima.
+        // - Pembayaran aktual diproses di web Akuntansi lewat menu Pelunasan Penjualan.
+        // - jenis_transaksi = 'COD' → masuk sebagai Piutang, bayar = 0.
         $payload = [
             'no_nota' => $record->no_nota,
             'tanggal' => $record->tanggal ? $record->tanggal->format('Y-m-d') : date('Y-m-d'),
             'nama_customer' => $record->tujuan_nota,
             'alamat' => $record->alamat,
             'metode_pembayaran' => $metodePembayaran,
-            'jenis_transaksi' => 'BAYAR_DIMUKA',
+            'jenis_transaksi' => 'COD',
             'bank' => $rekening?->nama_bank,
             'no_rekening' => $rekening?->no_rekening,
             'sub_total' => $grandTotal,
@@ -77,8 +90,11 @@ class PenjualanSyncService
             'ppn_nominal' => $ppnNominal,
             'ongkir' => $ongkir,
             'total' => $totalAkhir,
-            'bayar' => $totalAkhir,
+            'bayar' => 0,
             'kembalian' => 0,
+            'keterangan_pembayaran' => $record->metode_pembayaran
+                ? 'Metode bayar ERP: ' . $record->metode_pembayaran
+                : null,
             'items' => $itemsPayload,
         ];
 

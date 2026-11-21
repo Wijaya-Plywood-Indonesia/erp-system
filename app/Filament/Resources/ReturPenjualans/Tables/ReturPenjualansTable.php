@@ -7,6 +7,7 @@ use App\Models\ReturPenjualan;
 use App\Services\Akuntansi\ReturPenjualanSyncService;
 use Filament\Actions\Action;
 use Filament\Actions\DeleteAction;
+use Filament\Actions\EditAction;
 use Filament\Notifications\Notification;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Grouping\Group;
@@ -16,6 +17,8 @@ class ReturPenjualansTable
 {
     public static function configure(Table $table): Table
     {
+        $isKantor = (bool) auth()->user()?->hasAnyRole(['edmeros', 'super_admin', 'Super Admin']);
+
         return $table
             ->columns([
                 TextColumn::make('tanggal')
@@ -53,7 +56,8 @@ class ReturPenjualansTable
                     ->label('Total Retur')
                     ->money('IDR')
                     ->sortable()
-                    ->alignRight(),
+                    ->alignRight()
+                    ->visible($isKantor),
 
                 TextColumn::make('status_retur')
                     ->label('Status')
@@ -161,7 +165,12 @@ class ReturPenjualansTable
                         }
                     }),
 
-                EditAction::make(),
+                Action::make('edit')
+                    ->label('Edit')
+                    ->icon('heroicon-o-pencil-square')
+                    ->color('primary')
+                    ->url(fn (ReturPenjualan $record) => FormReturPenjualan::getUrl(['edit' => $record->id])),
+
                 DeleteAction::make(),
             ]);
     }

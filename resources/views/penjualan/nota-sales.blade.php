@@ -300,10 +300,10 @@
                         @if($hasM3)
                         <td class="text-center" style="white-space: nowrap;">{{ ($item->hit_kbk ?? 'b') === 'm' && $item->m3 !== null ? number_format($item->m3, 4, ',', '.') : '-' }}</td>
                         @endif
-                        <td class="text-right">{{ number_format($item->harga, 0, ',', '.') }}</td>
-                        <td class="text-center">{{ number_format($item->potongan ?? 0, 0, ',', '.') }}</td>
-                        <td class="text-center">{{ number_format($item->total_pot ?? 0, 0, ',', '.') }}</td>
-                        <td class="text-right">{{ number_format($item->subtotal, 0, ',', '.') }}</td>
+                        <td class="text-right">{{ \App\Http\Controllers\PenjualanCetakController::formatRupiah($item->harga) }}</td>
+                        <td class="text-center">{{ \App\Http\Controllers\PenjualanCetakController::formatRupiah($item->potongan ?? 0) }}</td>
+                        <td class="text-center">{{ \App\Http\Controllers\PenjualanCetakController::formatRupiah($item->total_pot ?? 0) }}</td>
+                        <td class="text-right">{{ \App\Http\Controllers\PenjualanCetakController::formatRupiah($item->subtotal) }}</td>
                     </tr>
                 @endforeach
             </tbody>
@@ -321,28 +321,28 @@
                 @if ($ppnPersen > 0 || $ongkir > 0)
                     <tr>
                         <td colspan="{{ $colsTotal }}" class="total-label" style="padding-top: 6px; padding-bottom: 2px; font-size: 13px;">Subtotal</td>
-                        <td class="total-value" style="padding-top: 6px; padding-bottom: 2px; font-size: 13px;">{{ number_format($grandTotal, 0, ',', '.') }}</td>
+                        <td class="total-value" style="padding-top: 6px; padding-bottom: 2px; font-size: 13px;">{{ \App\Http\Controllers\PenjualanCetakController::formatRupiah($grandTotal) }}</td>
                     </tr>
                     @if ($ppnPersen > 0)
                     <tr>
                         <td colspan="{{ $colsTotal }}" class="total-label" style="padding-top: 2px; padding-bottom: 2px; font-size: 13px;">PPN {{ $ppnPersen }}%</td>
-                        <td class="total-value" style="padding-top: 2px; padding-bottom: 2px; font-size: 13px;">{{ number_format($ppnNominal, 0, ',', '.') }}</td>
+                        <td class="total-value" style="padding-top: 2px; padding-bottom: 2px; font-size: 13px;">{{ \App\Http\Controllers\PenjualanCetakController::formatRupiah($ppnNominal) }}</td>
                     </tr>
                     @endif
                     @if ($ongkir > 0)
                     <tr>
                         <td colspan="{{ $colsTotal }}" class="total-label" style="padding-top: 2px; padding-bottom: 2px; font-size: 13px;">Ongkir</td>
-                        <td class="total-value" style="padding-top: 2px; padding-bottom: 2px; font-size: 13px;">{{ number_format($ongkir, 0, ',', '.') }}</td>
+                        <td class="total-value" style="padding-top: 2px; padding-bottom: 2px; font-size: 13px;">{{ \App\Http\Controllers\PenjualanCetakController::formatRupiah($ongkir) }}</td>
                     </tr>
                     @endif
                     <tr>
                         <td colspan="{{ $colsTotal }}" class="total-label" style="border-top: 1px solid #000; font-size: 14px;">Total</td>
-                        <td class="total-value" style="border-top: 1px solid #000; font-size: 14px;">{{ number_format($totalAkhir, 0, ',', '.') }}</td>
+                        <td class="total-value" style="border-top: 1px solid #000; font-size: 14px;">{{ \App\Http\Controllers\PenjualanCetakController::formatRupiah($totalAkhir) }}</td>
                     </tr>
                 @else
                     <tr>
                         <td colspan="{{ $colsTotal }}" class="total-label">Total</td>
-                        <td class="total-value">{{ number_format($grandTotal, 0, ',', '.') }}</td>
+                        <td class="total-value">{{ \App\Http\Controllers\PenjualanCetakController::formatRupiah($grandTotal) }}</td>
                     </tr>
                 @endif
             </tfoot>

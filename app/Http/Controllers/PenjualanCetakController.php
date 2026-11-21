@@ -13,6 +13,69 @@ use Illuminate\Support\Facades\Log;
 class PenjualanCetakController extends Controller
 {
     /**
+     * Helper formatting Rupiah / Angka: jika ada desimal tampilkan 2 angka di belakang koma, jika bulat tampilkan tanpa desimal.
+     */
+    public static function formatRupiah($val): string
+    {
+        $floatVal = (float) $val;
+        return (abs($floatVal - round($floatVal)) > 0.0001)
+            ? number_format($floatVal, 2, ',', '.')
+            : number_format($floatVal, 0, ',', '.');
+    }
+
+    /**
+     * Helper parsing input string harga/rupiah (mendukung '117.117,12', '117,117.12', '117117,12', '117117.12')
+     */
+    public static function parseRupiahInput($val): float
+    {
+        if (is_numeric($val)) {
+            return (float) $val;
+        }
+        $val = trim((string) $val);
+        if ($val === '') {
+            return 0.0;
+        }
+
+        if (strpos($val, ',') !== false && strpos($val, '.') !== false) {
+            if (strrpos($val, ',') > strrpos($val, '.')) {
+                $val = str_replace('.', '', $val);
+                $val = str_replace(',', '.', $val);
+            } else {
+                $val = str_replace(',', '', $val);
+            }
+        } elseif (strpos($val, ',') !== false) {
+            $val = str_replace(',', '.', $val);
+        }
+
+        return (float) $val;
+    }
+
+    /**
+     * Hitung subtotal presisi tinggi (mendukung presisi desimal DPP Excel saat PPN ON).
+     */
+    public static function calculateItemSubtotal(float $qty, float $harga, float $potongan = 0, ?float $m3 = null, string $hitKbk = 'b', float $ppnPersen = 11.0, bool $pakaiPpn = true): float
+    {
+        $multiplier = ($hitKbk === 'm' && $m3 !== null) ? $m3 : $qty;
+
+        // Jika PPN ON: cari tahu apakah harga adalah DPP dari harga include (rumus Excel: Harga Gross * 100 / 111)
+        if ($pakaiPpn) {
+            $factors = array_unique([1 + ($ppnPersen / 100), 1.11, 1.12]);
+            foreach ($factors as $f) {
+                if ($f <= 1) continue;
+                $inc = $harga * $f;
+                $roundInc = round($inc);
+                // Toleransi perbedaan pecahan pembulatan harga DPP (misal 117.117,12 * 1.11 = 130.000,0032)
+                if (abs($inc - $roundInc) < 0.05) {
+                    $baseSub = round(($multiplier * $roundInc) / $f, 2);
+                    return max(0, $baseSub - ($qty * $potongan));
+                }
+            }
+        }
+
+        return max(0, round(($multiplier * $harga) - ($qty * $potongan), 2));
+    }
+
+    /**
      * Helper resolve items dan penamaan untuk nota kantor dan nota sales.
      */
     public function resolvePenjualanItems(Penjualan $record, string $jenisNota = 'kantor'): array
@@ -96,8 +159,13 @@ class PenjualanCetakController extends Controller
                     $namaBarang = $detail->nama_barang;
                 }
             } else {
-                // NOTA KANTOR: [tebal] [grade]
-                if ($tebalStr !== null && $gradeName !== null) {
+                // NOTA KANTOR & INVOICE RESMI:
+                // Jika ada nama yang diedit/ditimpa (custom_nama atau nama_barang manual), prioritaskan itu
+                if (!empty(trim($detail->custom_nama ?? ''))) {
+                    $namaBarang = trim($detail->custom_nama);
+                } elseif (!empty(trim($detail->nama_barang ?? ''))) {
+                    $namaBarang = trim($detail->nama_barang);
+                } elseif ($tebalStr !== null && $gradeName !== null) {
                     $namaBarang = "{$tebalStr} {$gradeName}";
                 } elseif ($tebalStr !== null) {
                     $namaBarang = $tebalStr;
@@ -109,12 +177,24 @@ class PenjualanCetakController extends Controller
             }
 
             $hitKbk = $detail->hit_kbk ?? 'b';
+            $pakaiPpn = (bool) ($record->pakai_ppn ?? false);
+            $ppnPersen = (float) ($record->ppn_persen ?: 11.0);
 
-            // Hitung subtotal: jika hit_kbk 'm' dan ada m3 -> (m3 * harga) - (qty * pot), jika 'b' -> (qty * harga) - (qty * pot)
-            $base = ($hitKbk === 'm' && $m3 !== null) ? ($m3 * $harga) : ($qty * $harga);
-            $subtotal = $base - ($qty * $potongan);
-            if ($subtotal < 0) {
-                $subtotal = 0;
+            // Hitung otomatis dengan presisi Excel atau gunakan dari database jika ada
+            if ($detail->subtotal !== null && (float) $detail->subtotal > 0) {
+                // Cek apakah subtotal yang tersimpan adalah perkalian biasa yang selisih dengan presisi Excel
+                $excelSubtotal = self::calculateItemSubtotal($qty, $harga, $potongan, $m3, $hitKbk, $ppnPersen, $pakaiPpn);
+                $storedSubtotal = (float) $detail->subtotal;
+                $directSubtotal = max(0, (($hitKbk === 'm' && $m3 !== null ? $m3 : $qty) * $harga) - ($qty * $potongan));
+
+                // Jika nilai tersimpan sama dengan perkalian kasar (ada selisih desimal dengan Excel), gunakan otomatis presisi Excel
+                if (abs($storedSubtotal - $directSubtotal) < 0.05 && abs($storedSubtotal - $excelSubtotal) > 0.01) {
+                    $subtotal = $excelSubtotal;
+                } else {
+                    $subtotal = $storedSubtotal;
+                }
+            } else {
+                $subtotal = self::calculateItemSubtotal($qty, $harga, $potongan, $m3, $hitKbk, $ppnPersen, $pakaiPpn);
             }
             $grandTotal += $subtotal;
 
@@ -172,27 +252,28 @@ class PenjualanCetakController extends Controller
                     }
                 }
                 if (isset($data['harga'])) {
-                    $hargaStr = str_replace('.', '', $data['harga']);
-                    $hargaStr = str_replace(',', '.', $hargaStr);
-                    $detail->harga = (float) $hargaStr;
+                    $detail->harga = self::parseRupiahInput($data['harga']);
                 }
                 if (isset($data['potongan'])) {
-                    $potStr = str_replace('.', '', $data['potongan']);
-                    $potStr = str_replace(',', '.', $potStr);
-                    $detail->potongan = (float) $potStr;
+                    $detail->potongan = self::parseRupiahInput($data['potongan']);
                 }
 
                 if (isset($data['hit_kbk'])) {
                     $detail->hit_kbk = $data['hit_kbk'] === 'm' ? 'm' : 'b';
                 }
 
-                $qty = (float) ($detail->jumlah ?? 0);
-                $m3 = $detail->custom_m3 !== null ? (float) $detail->custom_m3 : null;
-                $harga = (float) ($detail->harga ?? 0);
-                $pot = (float) ($detail->potongan ?? 0);
-                $hitKbk = $detail->hit_kbk ?? 'b';
-                $base = ($hitKbk === 'm' && $m3 !== null) ? ($m3 * $harga) : ($qty * $harga);
-                $detail->subtotal = max(0, $base - ($qty * $pot));
+                if (isset($data['subtotal']) && filled($data['subtotal'])) {
+                    $detail->subtotal = self::parseRupiahInput($data['subtotal']);
+                } else {
+                    $qty = (float) ($detail->jumlah ?? 0);
+                    $m3 = $detail->custom_m3 !== null ? (float) $detail->custom_m3 : null;
+                    $harga = (float) ($detail->harga ?? 0);
+                    $pot = (float) ($detail->potongan ?? 0);
+                    $hitKbk = $detail->hit_kbk ?? 'b';
+                    $ppnPersen = (float) ($record->ppn_persen ?: 11.0);
+                    $pakaiPpn = (bool) ($record->pakai_ppn ?? false);
+                    $detail->subtotal = self::calculateItemSubtotal($qty, $harga, $pot, $m3, $hitKbk, $ppnPersen, $pakaiPpn);
+                }
 
                 $detail->save();
             }
@@ -261,7 +342,7 @@ class PenjualanCetakController extends Controller
         $pakaiPpn = $request->has('pakai_ppn') ? (bool) $request->input('pakai_ppn') : false;
         $ppnPersen = $pakaiPpn ? 11.0 : 0.0;
         $ppnNominal = round(($grandTotal * $ppnPersen) / 100, 2);
-        $ongkir = $request->has('ongkir') ? (float) str_replace(['.', ','], ['', '.'], $request->input('ongkir')) : (float) ($record->ongkir ?? 0);
+        $ongkir = $request->has('ongkir') ? self::parseRupiahInput($request->input('ongkir')) : (float) ($record->ongkir ?? 0);
         $totalAkhir = $grandTotal + $ppnNominal + $ongkir;
 
         $record->update([
