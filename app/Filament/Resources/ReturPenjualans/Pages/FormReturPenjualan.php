@@ -30,8 +30,12 @@ class FormReturPenjualan extends Page
     #[Url(as: 'nota', keep: false)]
     public ?int $selectedPenjualanId = null;
 
+    #[Url(as: 'edit', keep: false)]
+    public ?int $returId = null;
+
     // ── FORM STATE ──────────────────────────────────────────────────────────
 
+    public ?ReturPenjualan $editingRetur = null;
     public ?Penjualan $selectedNota = null;
 
     /**
@@ -51,8 +55,77 @@ class FormReturPenjualan extends Page
     {
         $this->tanggal = now()->format('Y-m-d');
 
-        if ($this->selectedPenjualanId) {
+        if ($this->returId) {
+            $this->loadExistingRetur($this->returId);
+        } elseif ($this->selectedPenjualanId) {
             $this->loadNota($this->selectedPenjualanId, silent: true);
+        }
+    }
+
+    private function loadExistingRetur(int $id): void
+    {
+        $retur = ReturPenjualan::with(['penjualan.detail', 'details'])->find($id);
+        if (!$retur || !$retur->penjualan) {
+            Notification::make()->title('Data retur tidak ditemukan.')->danger()->send();
+            return;
+        }
+
+        $this->editingRetur = $retur;
+        $this->selectedPenjualanId = $retur->penjualan_id;
+        $this->selectedNota = $retur->penjualan;
+        $this->tanggal = $retur->tanggal ? $retur->tanggal->format('Y-m-d') : now()->format('Y-m-d');
+        $this->keterangan_retur = $retur->keterangan ?? '';
+
+        // Histori retur selain retur saat ini
+        $historiRetur = DB::table('retur_penjualans')
+            ->join('detail_retur_penjualans', 'retur_penjualans.id', '=', 'detail_retur_penjualans.retur_penjualan_id')
+            ->where('retur_penjualans.no_nota', $retur->no_nota)
+            ->where('retur_penjualans.id', '!=', $retur->id)
+            ->select('detail_retur_penjualans.detail_penjualan_id', DB::raw('SUM(detail_retur_penjualans.qty) as total_retur'))
+            ->groupBy('detail_retur_penjualans.detail_penjualan_id')
+            ->pluck('total_retur', 'detail_penjualan_id')
+            ->toArray();
+
+        $detailReturSaatIni = $retur->details->keyBy('detail_penjualan_id');
+
+        $this->items = [];
+        foreach ($retur->penjualan->detail as $d) {
+            $kategori = strtolower(trim($d->kategori_barang ?? ''));
+            $namaLower = strtolower(trim($d->custom_nama ?: $d->nama_barang));
+            $isVeneer = ($kategori === 'veneer' || str_contains($namaLower, 'veneer'));
+
+            $qtyBeli = (float) ($d->jumlah ?? 0);
+            $qtyTereturLain = (float) ($historiRetur[$d->id] ?? 0);
+            $sisaQty = $isVeneer ? 0 : max(0, $qtyBeli - $qtyTereturLain);
+            $harga = (float) ($d->harga ?? 0);
+
+            $existingDetail = $detailReturSaatIni->get($d->id);
+            $qtyRetur = $existingDetail ? (float) $existingDetail->qty : 0;
+            $selected = ($qtyRetur > 0);
+
+            $hitKbk = $existingDetail ? ($existingDetail->hit_kbk ?? $d->hit_kbk ?? 'b') : ($d->hit_kbk ?? 'b');
+            $customM3 = (float) ($existingDetail ? ($existingDetail->custom_m3 ?? $d->custom_m3 ?? 0) : ($d->custom_m3 ?? 0));
+            $potongan = (float) ($existingDetail ? ($existingDetail->potongan ?? $d->potongan ?? 0) : ($d->potongan ?? 0));
+
+            $multiplier = ($hitKbk === 'm' && $customM3 > 0) ? $customM3 : $qtyRetur;
+            $subtotal = $selected ? max(0, ($multiplier * $harga) - $potongan) : 0;
+
+            $this->items[] = [
+                'detail_id'    => $d->id,
+                'nama_barang'  => $d->custom_nama ?: $d->nama_barang,
+                'satuan'       => $d->satuan ?? 'pcs',
+                'harga'        => $harga,
+                'hit_kbk'      => $hitKbk,
+                'custom_m3'    => $customM3,
+                'qty_beli'     => $qtyBeli,
+                'qty_teretur'  => $qtyTereturLain,
+                'sisa_qty'     => $sisaQty,
+                'qty_retur'    => $qtyRetur,
+                'potongan'     => $potongan,
+                'subtotal'     => $subtotal,
+                'selected'     => $selected,
+                'is_veneer'    => $isVeneer,
+            ];
         }
     }
 
@@ -185,6 +258,8 @@ class FormReturPenjualan extends Page
 
     private function resetSelection(): void
     {
+        $this->editingRetur = null;
+        $this->returId = null;
         $this->selectedPenjualanId = null;
         $this->selectedNota = null;
         $this->items = [];
@@ -377,30 +452,45 @@ class FormReturPenjualan extends Page
             DB::transaction(function () use ($itemsRetur, $ringkasan, &$returRecord) {
                 $userId = auth()->id();
 
-                // Generate no_retur
-                $prefix    = 'RET-' . date('Ymd');
-                $lastCount = ReturPenjualan::where('no_retur', 'like', "{$prefix}%")->count() + 1;
-                $noRetur   = sprintf('%s-%04d', $prefix, $lastCount);
+                if ($this->editingRetur) {
+                    $returRecord = $this->editingRetur;
+                    $returRecord->update([
+                        'tanggal'               => $this->tanggal ?: today()->toDateString(),
+                        'keterangan'            => $this->keterangan_retur,
+                        'sub_total'             => $ringkasan['sub_total'],
+                        'total'                 => $ringkasan['total'],
+                        // Reset status sync jika retur diedit
+                        'status_sync_akuntansi' => 'draft',
+                    ]);
 
-                $returRecord = ReturPenjualan::create([
-                    'tanggal'               => $this->tanggal ?: today()->toDateString(),
-                    'no_retur'              => $noRetur,
-                    'penjualan_id'          => $this->selectedNota->id,
-                    'no_nota'               => $this->selectedNota->no_nota,
-                    'tujuan_nota'           => $this->selectedNota->tujuan_nota,
-                    'alamat'                => $this->selectedNota->alamat,
-                    'metode_pembayaran'     => $this->selectedNota->metode_pembayaran ?? 'Tunai',
-                    'kendaraan'             => $this->selectedNota->kendaraan,
-                    'plat_kendaraan'        => $this->selectedNota->plat_kendaraan,
-                    'nama_sopir'            => $this->selectedNota->nama_sopir,
-                    'sub_total'             => $ringkasan['sub_total'],
-                    'ppn_nominal'           => 0,
-                    'total'                 => $ringkasan['total'],
-                    'keterangan'            => $this->keterangan_retur,
-                    'status_retur'          => 'draft',
-                    'status_sync_akuntansi' => 'draft',
-                    'dibuat_oleh'           => $userId,
-                ]);
+                    // Hapus detail lama untuk diperbarui
+                    $returRecord->details()->delete();
+                } else {
+                    // Generate no_retur
+                    $prefix    = 'RET-' . date('Ymd');
+                    $lastCount = ReturPenjualan::where('no_retur', 'like', "{$prefix}%")->count() + 1;
+                    $noRetur   = sprintf('%s-%04d', $prefix, $lastCount);
+
+                    $returRecord = ReturPenjualan::create([
+                        'tanggal'               => $this->tanggal ?: today()->toDateString(),
+                        'no_retur'              => $noRetur,
+                        'penjualan_id'          => $this->selectedNota->id,
+                        'no_nota'               => $this->selectedNota->no_nota,
+                        'tujuan_nota'           => $this->selectedNota->tujuan_nota,
+                        'alamat'                => $this->selectedNota->alamat,
+                        'metode_pembayaran'     => $this->selectedNota->metode_pembayaran ?? 'Tunai',
+                        'kendaraan'             => $this->selectedNota->kendaraan,
+                        'plat_kendaraan'        => $this->selectedNota->plat_kendaraan,
+                        'nama_sopir'            => $this->selectedNota->nama_sopir,
+                        'sub_total'             => $ringkasan['sub_total'],
+                        'ppn_nominal'           => 0,
+                        'total'                 => $ringkasan['total'],
+                        'keterangan'            => $this->keterangan_retur,
+                        'status_retur'          => 'draft',
+                        'status_sync_akuntansi' => 'draft',
+                        'dibuat_oleh'           => $userId,
+                    ]);
+                }
 
                 foreach ($itemsRetur as $item) {
                     $qty      = (float) $item['qty_retur'];

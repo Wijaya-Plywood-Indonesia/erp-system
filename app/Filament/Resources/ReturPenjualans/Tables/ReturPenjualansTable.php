@@ -162,7 +162,12 @@ class ReturPenjualansTable
                         }
                     }),
 
-                EditAction::make(),
+                Action::make('edit')
+                    ->label('Edit')
+                    ->icon('heroicon-o-pencil-square')
+                    ->color('primary')
+                    ->url(fn (ReturPenjualan $record) => FormReturPenjualan::getUrl(['edit' => $record->id])),
+
                 DeleteAction::make(),
             ]);
     }

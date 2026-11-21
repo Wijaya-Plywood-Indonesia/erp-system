@@ -4,7 +4,7 @@
         {{-- HEADER --}}
         <div class="flex items-center justify-between">
             <div class="flex items-center gap-2">
-                @if ($selectedNota)
+                @if ($selectedNota && !$editingRetur)
                     <button type="button" wire:click="batalPilihNota"
                         class="p-2 rounded-xl bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 text-gray-600 dark:text-gray-300 shrink-0">
                         <x-heroicon-o-arrow-left class="w-5 h-5" />
@@ -15,10 +15,14 @@
                         <x-heroicon-o-arrow-left class="w-5 h-5" />
                     </a>
                 @endif
-                <h1 class="text-base font-black text-gray-900 dark:text-white">Retur Penjualan</h1>
+                <div>
+                    <h1 class="text-base font-black text-gray-900 dark:text-white">
+                        {{ $editingRetur ? 'Edit Retur Penjualan (' . $editingRetur->no_retur . ')' : 'Retur Penjualan' }}
+                    </h1>
+                </div>
             </div>
             <span class="text-xs font-bold text-gray-400">
-                {{ $selectedNota ? 'Langkah 2/2' : 'Langkah 1/2' }}
+                {{ $editingRetur ? 'Mode Edit' : ($selectedNota ? 'Langkah 2/2' : 'Langkah 1/2') }}
             </span>
         </div>
 
@@ -255,12 +259,12 @@
 
                 {{-- Tombol Simpan --}}
                 <button type="button" wire:click="simpanRetur"
-                    wire:confirm="Simpan retur ini sebagai draft? Anda perlu validasi setelahnya untuk dikirim ke Akuntansi."
+                    wire:confirm="Simpan perubahan retur ini? Anda perlu validasi ulang setelahnya untuk dikirim ke Akuntansi."
                     wire:loading.attr="disabled" wire:target="simpanRetur"
                     @if ($ringkasan['total'] <= 0 || trim($keterangan_retur) === '') disabled @endif
                     class="w-full py-3.5 rounded-xl bg-primary-600 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-black shadow-md flex items-center justify-center gap-2">
                     <span wire:loading.remove wire:target="simpanRetur" class="flex items-center gap-2">
-                        <x-heroicon-o-check-circle class="w-5 h-5" /> Simpan Retur (Draft)
+                        <x-heroicon-o-check-circle class="w-5 h-5" /> {{ $editingRetur ? 'Simpan Perubahan Retur' : 'Simpan Retur (Draft)' }}
                     </span>
                     <span wire:loading wire:target="simpanRetur" class="flex items-center gap-2">
                         <svg class="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none">
