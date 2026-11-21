@@ -59,9 +59,17 @@ class ReturPenjualanSyncService
         $ppnNominal = (float) ($record->ppn_nominal ?? 0);
         $total = (float) ($record->total > 0 ? $record->total : ($subTotal + $ppnNominal));
 
+        // Cari apakah ada ID penjualan di respon sync penjualan asal
+        $penjualanIdAkuntansi = null;
+        if ($record->penjualan && !empty($record->penjualan->sync_response)) {
+            $syncData = json_decode($record->penjualan->sync_response, true);
+            $penjualanIdAkuntansi = $syncData['data']['id'] ?? ($syncData['id'] ?? null);
+        }
+
         $payload = [
             'no_retur' => $record->no_retur,
             'no_nota' => $record->no_nota,
+            'penjualan_id_akuntansi' => $penjualanIdAkuntansi,
             'tanggal' => $record->tanggal ? $record->tanggal->format('Y-m-d') : date('Y-m-d'),
             'nama_customer' => $record->tujuan_nota,
             'alamat' => $record->alamat,
