@@ -149,9 +149,14 @@ class FormReturPenjualan extends Page
         $this->items = [];
 
         foreach ($nota->detail as $d) {
+            // Validasi: hanya barang kategori plywood/triplek yang boleh diretur (veneer dilarang)
+            $kategori = strtolower(trim($d->kategori_barang ?? ''));
+            $namaLower = strtolower(trim($d->custom_nama ?: $d->nama_barang));
+            $isVeneer = ($kategori === 'veneer' || str_contains($namaLower, 'veneer'));
+
             $qtyBeli = (float) ($d->jumlah ?? 0);
             $qtyTeretur = (float) ($historiRetur[$d->id] ?? 0);
-            $sisaQty = max(0, $qtyBeli - $qtyTeretur);
+            $sisaQty = $isVeneer ? 0 : max(0, $qtyBeli - $qtyTeretur);
             $harga = (float) ($d->harga ?? 0);
 
             $this->items[] = [
@@ -168,6 +173,7 @@ class FormReturPenjualan extends Page
                 'potongan'     => (float) ($d->potongan ?? 0),
                 'subtotal'     => 0,
                 'selected'     => false,
+                'is_veneer'    => $isVeneer,
             ];
         }
     }
@@ -190,6 +196,14 @@ class FormReturPenjualan extends Page
     public function toggleItem(int $index): void
     {
         if (!isset($this->items[$index])) return;
+        if (!empty($this->items[$index]['is_veneer'])) {
+            Notification::make()
+                ->title('Barang Tidak Bisa Diretur')
+                ->body('Veneer tidak boleh diretur. Hanya Plywood / Triplek yang dapat diretur.')
+                ->warning()
+                ->send();
+            return;
+        }
         if (($this->items[$index]['sisa_qty'] ?? 0) <= 0) {
             $this->items[$index]['selected'] = false;
             $this->items[$index]['qty_retur'] = 0;
@@ -340,12 +354,12 @@ class FormReturPenjualan extends Page
         }
 
         $itemsRetur = collect($this->items)
-            ->filter(fn($it) => ($it['selected'] ?? false) && ($it['qty_retur'] ?? 0) > 0);
+            ->filter(fn($it) => empty($it['is_veneer']) && ($it['selected'] ?? false) && ($it['qty_retur'] ?? 0) > 0);
 
         if ($itemsRetur->isEmpty()) {
             Notification::make()
                 ->title('Pilih Barang')
-                ->body('Pilih minimal 1 barang dengan qty retur lebih dari 0.')
+                ->body('Pilih minimal 1 barang (hanya Plywood / Triplek) dengan qty retur lebih dari 0.')
                 ->warning()->send();
             return;
         }

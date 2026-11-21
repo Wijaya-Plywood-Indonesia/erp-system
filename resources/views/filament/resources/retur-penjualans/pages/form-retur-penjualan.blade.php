@@ -124,7 +124,8 @@
             <div class="flex flex-col gap-2">
                 @foreach ($items as $index => $item)
                     @php
-                        $isAvailable = ($item['sisa_qty'] ?? 0) > 0;
+                        $isVeneer    = $item['is_veneer'] ?? false;
+                        $isAvailable = !$isVeneer && ($item['sisa_qty'] ?? 0) > 0;
                         $isSelected  = $item['selected'] ?? false;
                         $isM3        = ($item['hit_kbk'] ?? 'b') === 'm';
                     @endphp
@@ -149,22 +150,28 @@
 
                             {{-- Info Barang --}}
                             <div class="min-w-0 flex-1">
-                                <div class="text-sm font-bold truncate {{ !$isAvailable ? 'line-through text-gray-400' : 'text-gray-900 dark:text-white' }}">
+                                <div class="text-sm font-bold truncate {{ !$isAvailable ? ($isVeneer ? 'text-gray-400' : 'line-through text-gray-400') : 'text-gray-900 dark:text-white' }}">
                                     {{ $item['nama_barang'] }}
                                 </div>
                                 <div class="flex items-center gap-1.5 flex-wrap mt-0.5">
-                                    <span class="text-[10px] font-bold px-1.5 py-0.5 rounded
-                                        {{ $item['qty_teretur'] > 0 ? 'bg-amber-50 text-amber-600 dark:bg-amber-950/40 dark:text-amber-400' : 'bg-gray-50 text-gray-400 dark:bg-gray-800' }}">
-                                        Diretur {{ $item['qty_teretur'] }}/{{ $item['qty_beli'] }} {{ $item['satuan'] }}
-                                    </span>
-                                    @if (!$isAvailable)
-                                        <span class="text-[10px] font-bold text-red-500">Sudah habis diretur</span>
-                                    @else
-                                        <span class="text-[10px] text-gray-400">
-                                            Sisa {{ $item['sisa_qty'] }} {{ $item['satuan'] }}
-                                            &bull; Rp {{ number_format($item['harga'], 0, ',', '.') }}
-                                            @if ($isM3) &bull; <span class="text-blue-500 font-bold">M3</span> @endif
+                                    @if ($isVeneer)
+                                        <span class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-red-100 text-red-600 dark:bg-red-950/40 dark:text-red-400">
+                                            Tidak Boleh Diretur (Veneer)
                                         </span>
+                                    @else
+                                        <span class="text-[10px] font-bold px-1.5 py-0.5 rounded
+                                            {{ $item['qty_teretur'] > 0 ? 'bg-amber-50 text-amber-600 dark:bg-amber-950/40 dark:text-amber-400' : 'bg-gray-50 text-gray-400 dark:bg-gray-800' }}">
+                                            Diretur {{ $item['qty_teretur'] }}/{{ $item['qty_beli'] }} {{ $item['satuan'] }}
+                                        </span>
+                                        @if (!$isAvailable)
+                                            <span class="text-[10px] font-bold text-red-500">Sudah habis diretur</span>
+                                        @else
+                                            <span class="text-[10px] text-gray-400">
+                                                Sisa {{ $item['sisa_qty'] }} {{ $item['satuan'] }}
+                                                &bull; Rp {{ number_format($item['harga'], 0, ',', '.') }}
+                                                @if ($isM3) &bull; <span class="text-blue-500 font-bold">M3</span> @endif
+                                            </span>
+                                        @endif
                                     @endif
                                 </div>
                             </div>
