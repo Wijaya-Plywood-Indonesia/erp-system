@@ -198,18 +198,29 @@ class PenjualanCetakController extends Controller
             }
             $grandTotal += $subtotal;
 
+            // Susun nama master asli sistem untuk sinkronisasi ke Akuntansi (tanpa nama editan nota/merek)
+            $namaMasterAsli = null;
+            if ($tebalStr !== null && $gradeName !== null) {
+                $namaMasterAsli = "{$tebalStr} {$gradeName}";
+            } elseif ($tebalStr !== null) {
+                $namaMasterAsli = $tebalStr;
+            } elseif ($gradeName !== null) {
+                $namaMasterAsli = $gradeName;
+            }
+
             $items[] = (object) [
-                'id_detail'   => $detail->id,
-                'nama_barang' => $namaBarang,
-                'satuan'      => $satuan,
-                'qty'         => $qty,
-                'm3'          => $m3,
-                'hit_kbk'     => $hitKbk,
-                'harga'       => $harga,
-                'potongan'    => $potongan,
-                'total_pot'   => $potongan * $qty,
-                'subtotal'    => $subtotal,
-                'keterangan'  => $detail->keterangan ?? '',
+                'id_detail'        => $detail->id,
+                'nama_barang'      => $namaBarang,
+                'nama_barang_asli' => $namaMasterAsli,
+                'satuan'           => $satuan,
+                'qty'              => $qty,
+                'm3'               => $m3,
+                'hit_kbk'          => $hitKbk,
+                'harga'            => $harga,
+                'potongan'         => $potongan,
+                'total_pot'        => $potongan * $qty,
+                'subtotal'         => $subtotal,
+                'keterangan'       => $detail->keterangan ?? '',
             ];
         }
 

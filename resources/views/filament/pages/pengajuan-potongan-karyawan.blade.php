@@ -75,7 +75,12 @@
         </div>
 
         @if ($activeTab === 'persetujuan' && $this->canManageApproval())
-            <div class="pb-2 sm:pb-0">
+            <div class="pb-2 sm:pb-0 flex flex-wrap items-center gap-2">
+                <x-filament::button size="sm" color="info" icon="heroicon-o-sparkles"
+                    wire:click="mulaiPeriksaSemua" class="w-full sm:w-auto">
+                    Periksa Cepat (Semua Pending)
+                </x-filament::button>
+
                 <x-filament::button size="sm" color="primary" icon="heroicon-o-plus"
                     wire:click="bukaAdminCreateModal" class="w-full sm:w-auto">
                     Buat Pengajuan Baru (Kantor)
@@ -484,25 +489,44 @@
     {{-- ========================================================================= --}}
     @if ($activeTab === 'persetujuan' && $this->canManageApproval())
         <div class="space-y-6" wire:key="tab-persetujuan">
-            {{-- Filter Status --}}
-            <div class="flex flex-wrap items-center gap-2 sm:gap-3">
-                <span class="text-xs font-bold uppercase text-gray-500">Filter Status:</span>
-                <button type="button" wire:click="$set('filterStatusPersetujuan', 'all')"
-                    class="px-3 py-1 text-xs rounded-full border {{ $filterStatusPersetujuan === 'all' ? 'bg-primary-600 text-white border-primary-600' : 'bg-white text-gray-600 border-gray-300 dark:bg-gray-800 dark:text-gray-300' }}">
-                    Semua
-                </button>
-                <button type="button" wire:click="$set('filterStatusPersetujuan', 'pending')"
-                    class="px-3 py-1 text-xs rounded-full border {{ $filterStatusPersetujuan === 'pending' ? 'bg-amber-600 text-white border-amber-600' : 'bg-white text-gray-600 border-gray-300 dark:bg-gray-800 dark:text-gray-300' }}">
-                    Pending
-                </button>
-                <button type="button" wire:click="$set('filterStatusPersetujuan', 'approved')"
-                    class="px-3 py-1 text-xs rounded-full border {{ $filterStatusPersetujuan === 'approved' ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white text-gray-600 border-gray-300 dark:bg-gray-800 dark:text-gray-300' }}">
-                    Approved
-                </button>
-                <button type="button" wire:click="$set('filterStatusPersetujuan', 'rejected')"
-                    class="px-3 py-1 text-xs rounded-full border {{ $filterStatusPersetujuan === 'rejected' ? 'bg-rose-600 text-white border-rose-600' : 'bg-white text-gray-600 border-gray-300 dark:bg-gray-800 dark:text-gray-300' }}">
-                    Rejected
-                </button>
+            {{-- Filter Status & Tanggal --}}
+            <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3 bg-white dark:bg-gray-800 p-3 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm">
+                <div class="flex flex-wrap items-center gap-2 sm:gap-3">
+                    <span class="text-xs font-bold uppercase text-gray-500">Filter Status:</span>
+                    <button type="button" wire:click="$set('filterStatusPersetujuan', 'all')"
+                        class="px-3 py-1 text-xs rounded-full border {{ $filterStatusPersetujuan === 'all' ? 'bg-primary-600 text-white border-primary-600' : 'bg-white text-gray-600 border-gray-300 dark:bg-gray-800 dark:text-gray-300' }}">
+                        Semua
+                    </button>
+                    <button type="button" wire:click="$set('filterStatusPersetujuan', 'pending')"
+                        class="px-3 py-1 text-xs rounded-full border {{ $filterStatusPersetujuan === 'pending' ? 'bg-amber-600 text-white border-amber-600' : 'bg-white text-gray-600 border-gray-300 dark:bg-gray-800 dark:text-gray-300' }}">
+                        Pending
+                    </button>
+                    <button type="button" wire:click="$set('filterStatusPersetujuan', 'approved')"
+                        class="px-3 py-1 text-xs rounded-full border {{ $filterStatusPersetujuan === 'approved' ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white text-gray-600 border-gray-300 dark:bg-gray-800 dark:text-gray-300' }}">
+                        Approved
+                    </button>
+                    <button type="button" wire:click="$set('filterStatusPersetujuan', 'rejected')"
+                        class="px-3 py-1 text-xs rounded-full border {{ $filterStatusPersetujuan === 'rejected' ? 'bg-rose-600 text-white border-rose-600' : 'bg-white text-gray-600 border-gray-300 dark:bg-gray-800 dark:text-gray-300' }}">
+                        Rejected
+                    </button>
+                </div>
+
+                <div class="flex flex-wrap items-center gap-2 text-xs">
+                    <span class="font-bold uppercase text-gray-500">Tanggal Potongan:</span>
+                    <div class="flex items-center gap-1.5">
+                        <input type="date" wire:model.live="filterTanggalPersetujuan"
+                            title="Filter Tanggal"
+                            class="text-xs rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 px-2.5 py-1 focus:ring-1 focus:ring-primary-500 focus:border-primary-500 shadow-sm" />
+                        @if ($filterTanggalPersetujuan)
+                            <button type="button"
+                                wire:click="$set('filterTanggalPersetujuan', null)"
+                                class="text-xs text-rose-500 hover:text-rose-700 font-medium px-1.5 py-1 hover:underline"
+                                title="Reset Filter Tanggal">
+                                Reset
+                            </button>
+                        @endif
+                    </div>
+                </div>
             </div>
 
             @php
@@ -512,7 +536,7 @@
             <x-filament::card class="relative">
                 {{-- Overlay loading --}}
                 <div wire:loading.flex
-                    wire:target="filterStatusPersetujuan,gotoPage,nextPage,previousPage,setPage,$set"
+                    wire:target="filterStatusPersetujuan,filterTanggalPersetujuan,gotoPage,nextPage,previousPage,setPage,$set"
                     class="absolute inset-0 z-10 items-center justify-center rounded-xl bg-white/70 dark:bg-gray-900/70 backdrop-blur-[1px]">
                     <div class="flex items-center gap-2 text-sm font-medium text-gray-600 dark:text-gray-300">
                         <x-filament::loading-indicator class="h-6 w-6 text-primary-600" />
@@ -854,7 +878,14 @@
     {{-- ========================================================================= --}}
     <x-filament::modal id="modal-review-potongan" width="2xl">
         <x-slot name="heading">
-            Pemeriksaan &amp; Persetujuan Pengajuan
+            <div class="flex items-center justify-between gap-2">
+                <span>Pemeriksaan &amp; Persetujuan Pengajuan</span>
+                @if ($isQuickReviewMode)
+                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-primary-100 text-primary-800 dark:bg-primary-900/40 dark:text-primary-300">
+                        Antrean: {{ $quickReviewProcessed + 1 }} dari {{ $quickReviewTotal }}
+                    </span>
+                @endif
+            </div>
         </x-slot>
         <x-slot name="description">
             @if ($selectedPengajuan)
@@ -993,10 +1024,19 @@
 
         <x-slot name="footer">
             <div class="flex flex-col-reverse gap-2 sm:flex-row sm:justify-between w-full">
-                <x-filament::button color="gray" class="w-full sm:w-auto"
-                    x-on:click="$dispatch('close-modal', { id: 'modal-review-potongan' })">
-                    Tutup
-                </x-filament::button>
+                <div class="flex items-center gap-2">
+                    <x-filament::button color="gray" class="w-full sm:w-auto"
+                        x-on:click="$dispatch('close-modal', { id: 'modal-review-potongan' })">
+                        {{ $isQuickReviewMode ? 'Keluar Mode Cek' : 'Tutup' }}
+                    </x-filament::button>
+
+                    @if ($isQuickReviewMode)
+                        <x-filament::button color="gray" outlined class="w-full sm:w-auto" wire:click="lewatiPengajuan"
+                            wire:target="lewatiPengajuan" wire:loading.attr="disabled">
+                            Lewati
+                        </x-filament::button>
+                    @endif
+                </div>
 
                 @if ($this->bisaDiproses($selectedPengajuan))
                     <div class="flex flex-col gap-2 sm:flex-row">

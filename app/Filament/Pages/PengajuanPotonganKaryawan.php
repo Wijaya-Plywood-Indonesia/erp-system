@@ -66,6 +66,9 @@ class PengajuanPotonganKaryawan extends Page implements HasForms
 
     public ?string $filterStatusPersetujuan = 'all';
 
+    #[Url(keep: true)]
+    public ?string $filterTanggalPersetujuan = null;
+
     /** Data dashboard dimuat setelah halaman tampil (agar skeleton muncul lebih dulu) */
     public bool $ready = false;
 
@@ -108,6 +111,16 @@ class PengajuanPotonganKaryawan extends Page implements HasForms
     public string $reviewCatatan = '';
 
     public string $rejectAlasan = '';
+
+    // State untuk Mode "Periksa Cepat / Dating App" (Queue Approval)
+    public bool $isQuickReviewMode = false;
+
+    /** @var array<int> */
+    public array $quickReviewQueue = [];
+
+    public int $quickReviewTotal = 0;
+
+    public int $quickReviewProcessed = 0;
 
     // State untuk Modal Buat Pengajuan Baru (Khusus Admin/Absen)
     public bool $showAdminCreateModal = false;
@@ -182,6 +195,11 @@ class PengajuanPotonganKaryawan extends Page implements HasForms
     }
 
     public function updatedFilterStatusPersetujuan(): void
+    {
+        $this->resetPage();
+    }
+
+    public function updatedFilterTanggalPersetujuan(): void
     {
         $this->resetPage();
     }
@@ -748,6 +766,10 @@ class PengajuanPotonganKaryawan extends Page implements HasForms
                 $this->filterStatusPersetujuan && $this->filterStatusPersetujuan !== 'all',
                 fn ($q) => $q->where('status', $this->filterStatusPersetujuan)
             )
+            ->when(
+                $this->filterTanggalPersetujuan,
+                fn ($q) => $q->whereDate('tanggal', $this->filterTanggalPersetujuan)
+            )
             // Urutan: pending (belum di-acc) > approved > rejected, lalu data terbaru di atas
             ->orderByRaw("CASE status WHEN 'pending' THEN 1 WHEN 'approved' THEN 2 WHEN 'rejected' THEN 3 ELSE 4 END")
             ->orderByDesc('created_at')
@@ -766,7 +788,68 @@ class PengajuanPotonganKaryawan extends Page implements HasForms
             return;
         }
 
-        $record = PengajuanPotongan::with(['pegawai', 'pengaju', 'pemroses', 'histories.user'])->findOrFail($pengajuanId);
+        $this->isQuickReviewMode = false;
+        $this->quickReviewQueue = [];
+        $this->quickReviewTotal = 0;
+        $this->quickReviewProcessed = 0;
+
+        $this->loadPengajuanForReview($pengajuanId);
+
+        $this->dispatch('open-modal', id: 'modal-review-potongan');
+    }
+
+    /**
+     * Memulai alur "Periksa Semua" (Queue Review ala dating app)
+     */
+    public function mulaiPeriksaSemua(): void
+    {
+        if (! $this->canManageApproval()) {
+            return;
+        }
+
+        // Ambil ID semua pengajuan yang berstatus pending sesuai filter tanggal saat ini
+        $query = PengajuanPotongan::query()
+            ->where('status', 'pending')
+            ->when(
+                $this->filterTanggalPersetujuan,
+                fn ($q) => $q->whereDate('tanggal', $this->filterTanggalPersetujuan)
+            )
+            ->orderBy('created_at', 'asc')
+            ->orderBy('id', 'asc');
+
+        $ids = $query->pluck('id')->all();
+
+        if (empty($ids)) {
+            Notification::make()
+                ->title('Tidak Ada Pengajuan Pending')
+                ->body('Tidak ada pengajuan potongan berstatus pending yang perlu diperiksa.')
+                ->info()
+                ->send();
+
+            return;
+        }
+
+        $this->isQuickReviewMode = true;
+        $this->quickReviewQueue = $ids;
+        $this->quickReviewTotal = count($ids);
+        $this->quickReviewProcessed = 0;
+
+        $nextId = array_shift($this->quickReviewQueue);
+        $this->loadPengajuanForReview($nextId);
+
+        $this->dispatch('open-modal', id: 'modal-review-potongan');
+    }
+
+    protected function loadPengajuanForReview(int $pengajuanId): void
+    {
+        $record = PengajuanPotongan::with(['pegawai', 'pengaju', 'pemroses', 'histories.user'])->find($pengajuanId);
+
+        if (! $record) {
+            $this->selectedPengajuanId = null;
+            $this->selectedPengajuan = null;
+
+            return;
+        }
 
         $this->selectedPengajuanId = $record->id;
         $this->selectedPengajuan = $record;
@@ -775,8 +858,40 @@ class PengajuanPotonganKaryawan extends Page implements HasForms
         $this->reviewCatatan = '';
         $this->rejectAlasan = '';
         $this->resetValidation();
+    }
 
-        $this->dispatch('open-modal', id: 'modal-review-potongan');
+    public function lewatiPengajuan(): void
+    {
+        if (! $this->isQuickReviewMode) {
+            $this->dispatch('close-modal', id: 'modal-review-potongan');
+
+            return;
+        }
+
+        $this->bukaPengajuanBerikutnya();
+    }
+
+    protected function bukaPengajuanBerikutnya(): void
+    {
+        $this->quickReviewProcessed++;
+
+        if (empty($this->quickReviewQueue)) {
+            $this->isQuickReviewMode = false;
+            $this->selectedPengajuanId = null;
+            $this->selectedPengajuan = null;
+            $this->dispatch('close-modal', id: 'modal-review-potongan');
+
+            Notification::make()
+                ->title('Semua Pengajuan Selesai Diperiksa')
+                ->body('Seluruh antrean pengajuan potongan telah selesai diproses.')
+                ->success()
+                ->send();
+
+            return;
+        }
+
+        $nextId = array_shift($this->quickReviewQueue);
+        $this->loadPengajuanForReview($nextId);
     }
 
     public function approvePengajuan(): void
@@ -823,8 +938,12 @@ class PengajuanPotonganKaryawan extends Page implements HasForms
                 ->success()
                 ->send();
 
-            $this->dispatch('close-modal', id: 'modal-review-potongan');
-            $this->showReviewModal = false;
+            if ($this->isQuickReviewMode) {
+                $this->bukaPengajuanBerikutnya();
+            } else {
+                $this->dispatch('close-modal', id: 'modal-review-potongan');
+                $this->showReviewModal = false;
+            }
         } catch (\Throwable $e) {
             Notification::make()
                 ->title('Proses Persetujuan Gagal')
@@ -877,8 +996,12 @@ class PengajuanPotonganKaryawan extends Page implements HasForms
                 ->warning()
                 ->send();
 
-            $this->dispatch('close-modal', id: 'modal-review-potongan');
-            $this->showReviewModal = false;
+            if ($this->isQuickReviewMode) {
+                $this->bukaPengajuanBerikutnya();
+            } else {
+                $this->dispatch('close-modal', id: 'modal-review-potongan');
+                $this->showReviewModal = false;
+            }
         } catch (\Throwable $e) {
             Notification::make()
                 ->title('Proses Penolakan Gagal')

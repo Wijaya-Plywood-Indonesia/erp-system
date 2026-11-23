@@ -28,18 +28,29 @@ class PenjualanSyncService
         }
 
         $itemsPayload = [];
+        $pakaiPpn = (bool) ($record->pakai_ppn ?? false);
+        $rawPpnPersen = (float) ($record->ppn_persen ?? 0);
+        $ppnPersen = $pakaiPpn ? ($rawPpnPersen > 0 ? $rawPpnPersen : 11.0) : 0.0;
+
         foreach ($resolvedItems as $item) {
             $qty = (float) ($item->qty ?? 0);
             $m3 = isset($item->m3) && $item->m3 !== null ? (float) $item->m3 : null;
             $harga = (float) ($item->harga ?? 0);
             $potongan = (float) ($item->potongan ?? 0);
+            // Nilai subtotal langsung mengambil hasil hitung resmi dari ERP (sudah presisi DPP jika PPN ON)
             $subtotal = (float) ($item->subtotal ?? ($qty * $harga));
 
             $hitKbk = $item->hit_kbk ?? 'b';
             $hitungDari = ($hitKbk === 'm' && $m3 !== null) ? 'm3' : 'qty';
 
+            // Prioritaskan nama_barang_asli (mengandung tebal & grade asli dari ERP)
+            // agar Akuntansi dapat memetakan ke master barang yang tepat.
+            $namaBarangKirim = !empty(trim($item->nama_barang_asli ?? ''))
+                ? trim($item->nama_barang_asli)
+                : $item->nama_barang;
+
             $itemsPayload[] = [
-                'nama_barang' => $item->nama_barang,
+                'nama_barang' => $namaBarangKirim,
                 'satuan' => $item->satuan ?? 'pcs',
                 'qty' => $qty,
                 'm3' => $m3,
@@ -63,19 +74,27 @@ class PenjualanSyncService
             $metodePembayaran = 'TUNAI';
         }
 
-        $ppnPersen = (float) ($record->ppn_persen ?? 0);
+        // Subtotal kiriman ke akuntansi adalah grandTotal barang dari ERP (DPP saat PPN ON)
+        $subTotalFinal = (float) $grandTotal;
         $ppnNominal = (float) ($record->ppn_nominal ?? 0);
-        if ($ppnPersen > 0 && $ppnNominal <= 0) {
-            $ppnNominal = round(($grandTotal * $ppnPersen) / 100, 2);
+
+        // Jika pakai PPN, hitung atau gunakan PPN nominal resmi dari ERP
+        if ($pakaiPpn && $ppnPersen > 0) {
+            if ($ppnNominal <= 0) {
+                $ppnNominal = round(($subTotalFinal * $ppnPersen) / 100, 2);
+            }
+        } else {
+            $ppnNominal = 0.0;
         }
+
         $ongkir = (float) ($record->ongkir ?? 0);
-        $totalAkhir = (float) ($record->total > 0 ? $record->total : ($grandTotal + $ppnNominal + $ongkir));
+        $totalAkhir = (float) ($record->total > 0 ? $record->total : round($subTotalFinal + $ppnNominal + $ongkir, 2));
 
         // Semua penjualan dari ERP masuk sebagai COD ke Akuntansi:
         // - metode_pembayaran di ERP hanya menentukan DI MANA nantinya uang dibayarkan
         //   (tunai / transfer), tapi belum berarti uang sudah diterima.
         // - Pembayaran aktual diproses di web Akuntansi lewat menu Pelunasan Penjualan.
-        // - jenis_transaksi = 'COD' → masuk sebagai Piutang, bayar = 0.
+        // - jenis_transaksi = 'COD', status_transaksi = 'BELUM DIBAYAR', bayar = 0.
         $payload = [
             'no_nota' => $record->no_nota,
             'tanggal' => $record->tanggal ? $record->tanggal->format('Y-m-d') : date('Y-m-d'),
@@ -85,13 +104,14 @@ class PenjualanSyncService
             'jenis_transaksi' => 'COD',
             'bank' => $rekening?->nama_bank,
             'no_rekening' => $rekening?->no_rekening,
-            'sub_total' => $grandTotal,
+            'sub_total' => $subTotalFinal,
             'ppn_persen' => $ppnPersen,
             'ppn_nominal' => $ppnNominal,
             'ongkir' => $ongkir,
             'total' => $totalAkhir,
             'bayar' => 0,
             'kembalian' => 0,
+            'status_transaksi' => 'BELUM DIBAYAR',
             'keterangan_pembayaran' => $record->metode_pembayaran
                 ? 'Metode bayar ERP: ' . $record->metode_pembayaran
                 : null,
