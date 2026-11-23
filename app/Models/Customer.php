@@ -13,6 +13,8 @@ class Customer extends Model
     protected $fillable = [
         'nama',
         'alamat',
+        'npwp',
+        'telepon',
     ];
 
     public function purchaseOrders(): HasMany

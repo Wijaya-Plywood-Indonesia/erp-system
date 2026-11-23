@@ -100,6 +100,7 @@ class PenjualanSyncService
             'tanggal' => $record->tanggal ? $record->tanggal->format('Y-m-d') : date('Y-m-d'),
             'nama_customer' => $record->tujuan_nota,
             'alamat' => $record->alamat,
+            'npwp' => $record->pembeli_bkp_npwp,
             'metode_pembayaran' => $metodePembayaran,
             'jenis_transaksi' => 'COD',
             'bank' => $rekening?->nama_bank,
