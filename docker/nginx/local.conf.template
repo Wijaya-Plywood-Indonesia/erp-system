@@ -1,0 +1,19 @@
+# Khusus tes lokal (HTTP saja, tanpa SSL)
+server {
+    listen 80;
+    server_name _;
+    root /var/www/html/public;
+    index index.php;
+    client_max_body_size 64M;
+
+    location / { try_files $uri $uri/ /index.php?$query_string; }
+    location ~ \.php$ {
+        resolver 127.0.0.11 valid=10s ipv6=off;
+        set $php_upstream app:9000;
+        fastcgi_pass $php_upstream;
+        fastcgi_param SCRIPT_FILENAME $realpath_root$fastcgi_script_name;
+        include fastcgi_params;
+        fastcgi_read_timeout 120;
+    }
+    location ~ /\.(?!well-known) { deny all; }
+}
