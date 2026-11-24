@@ -1,0 +1,65 @@
+name: Deploy ke VPS (Docker)
+# Sengaja manual dulu. Setelah VPS terbukti stabil, baru ganti trigger & matikan job deploy shared hosting lama.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Nama image (huruf kecil)
+        run: echo "IMG=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_ENV"
+
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build & push image app
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/php/Dockerfile
+          target: app
+          push: true
+          tags: ${{ env.IMG }}-app:latest
+          build-args: |
+            VITE_PUSHER_APP_KEY=${{ vars.VITE_PUSHER_APP_KEY }}
+            VITE_PUSHER_APP_CLUSTER=${{ vars.VITE_PUSHER_APP_CLUSTER }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build & push image web
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/php/Dockerfile
+          target: web
+          push: true
+          tags: ${{ env.IMG }}-web:latest
+          build-args: |
+            VITE_PUSHER_APP_KEY=${{ vars.VITE_PUSHER_APP_KEY }}
+            VITE_PUSHER_APP_CLUSTER=${{ vars.VITE_PUSHER_APP_CLUSTER }}
+          cache-from: type=gha
+
+      - name: Deploy di VPS
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          port: ${{ secrets.VPS_PORT }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          script: |
+            set -e
+            cd /opt/erp
+            docker compose pull
+            docker compose up -d --remove-orphans
+            docker image prune -f

@@ -1,0 +1,69 @@
+# PRODUKSI (VPS). Image dibangun oleh GitHub Actions lalu di-pull di sini.
+x-app: &app
+  image: ${APP_IMAGE}
+  restart: unless-stopped
+  env_file: .env
+  volumes:
+    - storage:/var/www/html/storage
+  depends_on:
+    db: { condition: service_healthy }
+    redis: { condition: service_started }
+  networks: [erp]
+
+services:
+  app:
+    <<: *app
+
+  queue:
+    <<: *app
+    user: www-data
+    command: php artisan queue:work --sleep=3 --tries=3 --max-time=3600
+
+  scheduler:
+    <<: *app
+    user: www-data
+    command: sh -c "while true; do php artisan schedule:run --no-interaction; sleep 60; done"
+
+  nginx:
+    image: ${WEB_IMAGE}
+    restart: unless-stopped
+    environment:
+      DOMAIN: ${DOMAIN}
+    ports: ["80:80", "443:443"]
+    volumes:
+      - storage:/var/www/html/storage:ro
+      - /etc/letsencrypt:/etc/letsencrypt:ro
+    depends_on: [app]
+    networks: [erp]
+
+  db:
+    image: mariadb:10.11
+    restart: unless-stopped
+    environment:
+      MARIADB_DATABASE: ${DB_DATABASE}
+      MARIADB_USER: ${DB_USERNAME}
+      MARIADB_PASSWORD: ${DB_PASSWORD}
+      MARIADB_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
+      TZ: Asia/Jakarta
+    command: --innodb-buffer-pool-size=512M --max-connections=100 --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+    volumes: [dbdata:/var/lib/mysql]
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      retries: 10
+    networks: [erp]      # tanpa "ports": DB tidak terbuka ke internet
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: redis-server --appendonly yes --maxmemory 128mb --maxmemory-policy allkeys-lru
+    volumes: [redisdata:/data]
+    networks: [erp]
+
+networks:
+  erp:
+
+volumes:
+  dbdata:
+  redisdata:
+  storage:
