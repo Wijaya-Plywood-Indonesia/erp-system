@@ -1,10 +1,10 @@
 # syntax=docker/dockerfile:1
 # ============ Base PHP (dipakai semua stage PHP) ============
 FROM php:8.4-fpm-alpine AS php-base
-RUN apk add --no-cache bash icu-libs libzip libpng libjpeg-turbo freetype imagemagick oniguruma \
+RUN apk add --no-cache bash icu-libs libzip libpng libjpeg-turbo freetype libwebp imagemagick oniguruma \
  && apk add --no-cache --virtual .build $PHPIZE_DEPS icu-dev libzip-dev libpng-dev libjpeg-turbo-dev \
-        freetype-dev imagemagick-dev oniguruma-dev \
- && docker-php-ext-configure gd --with-freetype --with-jpeg \
+        freetype-dev libwebp-dev imagemagick-dev oniguruma-dev \
+ && docker-php-ext-configure gd --with-freetype --with-jpeg --with-webp \
  && docker-php-ext-install -j"$(nproc)" pdo_mysql mbstring intl zip gd bcmath opcache exif \
  && pecl install imagick redis \
  && docker-php-ext-enable imagick redis \

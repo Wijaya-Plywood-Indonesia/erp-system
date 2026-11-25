@@ -29,15 +29,19 @@ services:
     restart: unless-stopped
     environment:
       DOMAIN: ${DOMAIN}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports: ["80:80", "443:443"]
     volumes:
+      - ./docker/nginx/default.conf.template:/etc/nginx/templates/default.conf.template:ro
+      - /home/wijaya21/certbot/letsencrypt:/etc/letsencrypt:ro
       - storage:/var/www/html/storage:ro
-      - /etc/letsencrypt:/etc/letsencrypt:ro
     depends_on: [app]
     networks: [erp]
 
   db:
     image: mariadb:10.11
+    ports: ["127.0.0.1:3307:3306"]
     restart: unless-stopped
     environment:
       MARIADB_DATABASE: ${DB_DATABASE}
