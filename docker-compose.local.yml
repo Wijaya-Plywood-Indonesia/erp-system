@@ -1,0 +1,53 @@
+# TES LOKAL (Docker Desktop + WSL2). Jalankan:
+#   docker compose -f docker-compose.local.yml --env-file .env.local up -d --build
+# Buka http://localhost:8080 . Database bisa diakses HeidiSQL di 127.0.0.1:3307
+x-app: &app
+  build:
+    context: .
+    dockerfile: docker/php/Dockerfile
+    target: app
+    args:
+      VITE_PUSHER_APP_KEY: ${PUSHER_APP_KEY:-local}
+      VITE_PUSHER_APP_CLUSTER: ${PUSHER_APP_CLUSTER:-ap1}
+  env_file: .env.local
+  volumes: [storage:/var/www/html/storage]
+  depends_on:
+    db: { condition: service_healthy }
+    redis: { condition: service_started }
+
+services:
+  app: { <<: *app }
+  queue:
+    <<: *app
+    user: www-data
+    command: php artisan queue:work --sleep=3 --tries=3
+  scheduler:
+    <<: *app
+    user: www-data
+    command: sh -c "while true; do php artisan schedule:run --no-interaction; sleep 60; done"
+  nginx:
+    build: { context: ., dockerfile: docker/php/Dockerfile, target: web }
+    ports: ["8080:80"]
+    volumes:
+      - storage:/var/www/html/storage:ro
+      - ./docker/nginx/local.conf.template:/etc/nginx/templates/default.conf.template:ro
+    depends_on: [app]
+  db:
+    image: mariadb:10.11
+    environment:
+      MARIADB_DATABASE: ${DB_DATABASE:-erp}
+      MARIADB_USER: ${DB_USERNAME:-erp}
+      MARIADB_PASSWORD: ${DB_PASSWORD:-erp}
+      MARIADB_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-root}
+    ports: ["127.0.0.1:3307:3306"]
+    volumes: [dbdata:/var/lib/mysql]
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      retries: 10
+  redis:
+    image: redis:7-alpine
+
+volumes:
+  dbdata:
+  storage:
