@@ -27,4 +27,26 @@ Thumbs.db
 public/build/
 public/js/filament/
 public/css/filament/
-public/fonts/filament/
+public/fonts/filament/docker/certbot/cloudflare.ini
+
+# Additional environment files
+.env.*
+!.env.example
+!.env.docker.example
+
+# Editor temporary files
+*.swp
+*.swo
+*~
+
+# Docker backup files
+docker-compose.yml.backup
+docker-compose.yml.save
+
+# Cloudflare credentials
+docker/certbot/cloudflare.ini
+
+# Database dumps
+*.sql
+*.sql.gz
+*.dump
