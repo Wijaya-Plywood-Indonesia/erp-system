@@ -88,7 +88,16 @@ class PenjualanSyncService
         }
 
         $ongkir = (float) ($record->ongkir ?? 0);
-        $totalAkhir = (float) ($record->total > 0 ? $record->total : round($subTotalFinal + $ppnNominal + $ongkir, 2));
+        $totalAkhir = round($subTotalFinal + $ppnNominal + $ongkir, 2);
+
+        // Pastikan header record di ERP juga selalu ter-update sinkron jika ada perbedaan
+        if (abs((float)$record->total - $totalAkhir) > 0.01 || abs((float)$record->sub_total - $subTotalFinal) > 0.01) {
+            $record->update([
+                'sub_total'   => $subTotalFinal,
+                'ppn_nominal' => $ppnNominal,
+                'total'       => $totalAkhir,
+            ]);
+        }
 
         // Semua penjualan dari ERP masuk sebagai COD ke Akuntansi:
         // - metode_pembayaran di ERP hanya menentukan DI MANA nantinya uang dibayarkan
