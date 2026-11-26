@@ -10,7 +10,12 @@ x-app: &app
       VITE_PUSHER_APP_KEY: ${PUSHER_APP_KEY:-local}
       VITE_PUSHER_APP_CLUSTER: ${PUSHER_APP_CLUSTER:-ap1}
   env_file: .env.local
-  volumes: [storage:/var/www/html/storage]
+  volumes:
+    - storage:/var/www/html/storage
+    - .:/var/www/html
+    - /var/www/html/vendor
+    - /var/www/html/public/build
+    - ./docker/php/local.ini:/usr/local/etc/php/conf.d/zz-local.ini:ro
   depends_on:
     db: { condition: service_healthy }
     redis: { condition: service_started }

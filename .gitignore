@@ -50,3 +50,4 @@ docker/certbot/cloudflare.ini
 *.sql
 *.sql.gz
 *.dump
+docker/php/local.ini

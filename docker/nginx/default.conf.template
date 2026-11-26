@@ -1,8 +1,31 @@
 # Redirect HTTP -> HTTPS
 server {
     listen 80;
-    server_name kayu.wijayaplywoods.com wahana.wijayaplywoods.com;
+    server_name kayu.wijayaplywoods.com wahana.wijayaplywoods.com marketing.wijayaplywoods.com;
     location / { return 301 https://$host$request_uri; }
+}
+
+# Proxy Marketing (Port 443)
+server {
+    listen 443 ssl;
+    http2 on;
+    server_name marketing.wijayaplywoods.com;
+
+    ssl_certificate     /etc/letsencrypt/live/marketing.wijayaplywoods.com-0001/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/marketing.wijayaplywoods.com-0001/privkey.pem;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_session_cache shared:SSL:10m;
+
+    client_max_body_size 64M;
+    server_tokens off;
+
+    location / {
+        proxy_pass http://host.docker.internal:8080;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+    }
 }
 
 # Proxy Wahana (Port 443)
@@ -69,4 +92,26 @@ server {
         try_files $uri /index.php?$query_string;
     }
     location ~ /\.(?!well-known) { deny all; }
+}
+
+# Akuntansi (Port 443)
+server {
+    listen 443 ssl;
+    http2 on;
+    server_name akuntansi.wijayaplywoods.com;
+
+    ssl_certificate     /etc/letsencrypt/live/akuntansi.wijayaplywoods.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/akuntansi.wijayaplywoods.com/privkey.pem;
+    ssl_protocols TLSv1.2 TLSv1.3;
+
+    client_max_body_size 64M;
+    server_tokens off;
+
+    location / {
+        proxy_pass http://host.docker.internal:8082;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+    }
 }
