@@ -67,12 +67,12 @@
 
                     <div class="flex flex-col justify-between">
                         <label class="block text-sm font-semibold text-gray-700 mb-1">
-                            PPN 11%
+                            PPN 12%
                         </label>
                         <div class="flex items-center mt-2">
                             <label class="inline-flex items-center cursor-pointer">
                                 <input type="checkbox" id="pakai_ppn" name="pakai_ppn" value="1" {{ ($record->pakai_ppn ?? false) ? 'checked' : '' }} class="rounded border-gray-300 text-indigo-600 shadow-sm focus:ring-indigo-500 h-5 w-5">
-                                <span class="ml-2 text-sm font-medium text-gray-800">Gunakan PPN (11%)</span>
+                                <span class="ml-2 text-sm font-medium text-gray-800">Gunakan PPN (12%)</span>
                             </label>
                         </div>
                         <p class="text-xs text-gray-500 mt-1">Cetak Invoice Resmi jika aktif.</p>

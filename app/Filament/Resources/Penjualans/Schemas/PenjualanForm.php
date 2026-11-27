@@ -98,12 +98,12 @@ class PenjualanForm
                 // ===== Field berikut hanya untuk orang kantor =====
 
                 Toggle::make('pakai_ppn')
-                    ->label('Pakai PPN (11%)')
+                    ->label('Pakai PPN (12%)')
                     ->default(false)
                     ->live()
                     ->visible(fn () => self::isKantor())
                     ->afterStateUpdated(function ($state, Set $set) {
-                        $set('ppn_persen', $state ? 11 : 0);
+                        $set('ppn_persen', $state ? 12 : 0);
                     }),
 
                 Hidden::make('ppn_persen')
