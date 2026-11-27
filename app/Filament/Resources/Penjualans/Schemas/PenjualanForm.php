@@ -4,12 +4,14 @@ namespace App\Filament\Resources\Penjualans\Schemas;
 
 use App\Models\Customer;
 use App\Models\Penjualan;
+use App\Services\Akuntansi\CustomerSyncService;
 use App\Services\NomorNotaService;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
+use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
 use Illuminate\Support\Carbon;
@@ -47,31 +49,61 @@ class PenjualanForm
                 TextInput::make('tujuan_nota')
                     ->label('Kepada / Customer')
                     ->required()
-                    ->datalist(fn () => Customer::pluck('nama')->toArray())
+                    ->datalist(fn () => CustomerSyncService::getCustomerOptions())
                     ->live(onBlur: true)
-                    ->afterStateUpdated(function ($state, Set $set) {
+                    ->afterStateUpdated(function ($state, Set $set, Get $get) {
                         if ($state) {
                             $customer = Customer::where('nama', $state)->first();
-                            if ($customer && $customer->alamat) {
-                                $set('alamat', $customer->alamat);
+                            if ($customer) {
+                                if ($customer->alamat) {
+                                    $set('alamat', $customer->alamat);
+                                }
+                                if ($customer->npwp) {
+                                    $set('pembeli_bkp_npwp', $customer->npwp);
+                                }
+                            } else {
+                                // Cari dari akuntansi
+                                $syncService = app(CustomerSyncService::class);
+                                $akuntansiCust = $syncService->getCustomerFromAkuntansi($state);
+                                if ($akuntansiCust) {
+                                    if (!empty($akuntansiCust['alamat'])) {
+                                        $set('alamat', $akuntansiCust['alamat']);
+                                    }
+                                    if (!empty($akuntansiCust['npwp'])) {
+                                        $set('pembeli_bkp_npwp', $akuntansiCust['npwp']);
+                                    }
+                                }
                             }
+
+                            // Trigger simpan langsung ke Akuntansi saat blur/input
+                            $alamat = $get('alamat');
+                            $npwp = $get('pembeli_bkp_npwp');
+                            app(CustomerSyncService::class)->syncCustomer($state, $alamat, $npwp);
                         }
                     }),
 
                 TextInput::make('alamat')
                     ->label('Alamat')
                     ->maxLength(255)
-                    ->nullable(),
+                    ->nullable()
+                    ->live(onBlur: true)
+                    ->afterStateUpdated(function ($state, Get $get) {
+                        $nama = $get('tujuan_nota');
+                        if ($nama) {
+                            $npwp = $get('pembeli_bkp_npwp');
+                            app(CustomerSyncService::class)->syncCustomer($nama, $state, $npwp);
+                        }
+                    }),
 
                 // ===== Field berikut hanya untuk orang kantor =====
 
                 Toggle::make('pakai_ppn')
-                    ->label('Pakai PPN (11%)')
+                    ->label('Pakai PPN (12%)')
                     ->default(false)
                     ->live()
                     ->visible(fn () => self::isKantor())
                     ->afterStateUpdated(function ($state, Set $set) {
-                        $set('ppn_persen', $state ? 11 : 0);
+                        $set('ppn_persen', $state ? 12 : 0);
                     }),
 
                 Hidden::make('ppn_persen')
@@ -82,7 +114,15 @@ class PenjualanForm
                     ->placeholder('Contoh: 00.000.000.0-000.000')
                     ->maxLength(100)
                     ->visible(fn ($get) => self::isKantor() && (bool) $get('pakai_ppn'))
-                    ->nullable(),
+                    ->nullable()
+                    ->live(onBlur: true)
+                    ->afterStateUpdated(function ($state, Get $get) {
+                        $nama = $get('tujuan_nota');
+                        if ($nama) {
+                            $alamat = $get('alamat');
+                            app(CustomerSyncService::class)->syncCustomer($nama, $alamat, $state);
+                        }
+                    }),
 
                 TextInput::make('ongkir')
                     ->label('Biaya Ongkir (Rp)')

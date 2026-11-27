@@ -16,6 +16,17 @@ class CustomersTable
             ->columns([
                 TextColumn::make('nama')
                     ->searchable(),
+                TextColumn::make('npwp')
+                    ->label('NPWP')
+                    ->placeholder('-')
+                    ->searchable(),
+                TextColumn::make('alamat')
+                    ->label('Alamat')
+                    ->placeholder('-')
+                    ->limit(50)
+                    ->searchable(),
+                TextColumn::make('telepon')
+                    ->searchable(),
                 TextColumn::make('created_at')
                     ->dateTime()
                     ->sortable()

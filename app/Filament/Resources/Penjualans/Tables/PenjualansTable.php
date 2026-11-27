@@ -134,6 +134,19 @@ class PenjualansTable
                             $controller = app(\App\Http\Controllers\PenjualanCetakController::class);
                             [$resolvedItems, $grandTotal] = $controller->resolvePenjualanItems($record, 'kantor');
 
+                            // Pastikan header total di ERP sinkron dengan grandTotal sebelum dikirim
+                            $pakaiPpn = (bool) ($record->pakai_ppn ?? false);
+                            $ppnPersen = $pakaiPpn ? (float) ($record->ppn_persen ?: 11) : 0;
+                            $ppnNominal = round(($grandTotal * $ppnPersen) / 100, 2);
+                            $ongkir = (float) ($record->ongkir ?? 0);
+                            $totalAkhir = $grandTotal + $ppnNominal + $ongkir;
+
+                            $record->update([
+                                'sub_total'   => $grandTotal,
+                                'ppn_nominal' => $ppnNominal,
+                                'total'       => $totalAkhir,
+                            ]);
+
                             $syncService = app(\App\Services\Akuntansi\PenjualanSyncService::class);
                             $result = $syncService->kirimPenjualan($record, $resolvedItems, $grandTotal);
 

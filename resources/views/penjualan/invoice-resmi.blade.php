@@ -309,9 +309,9 @@
         </table>
 
         @php
-            $ppnPersen = (float) ($record->ppn_persen ?? 11);
+            $ppnPersen = (float) ($record->ppn_persen ?? 12);
             if ($ppnPersen <= 0) {
-                $ppnPersen = 11;
+                $ppnPersen = 12;
             }
 
             // Perhitungan Harga Jual, PPN, dan Total
@@ -330,7 +330,7 @@
                     {{ \App\Http\Controllers\PenjualanCetakController::formatRupiah($hargaJual) }}</td>
             </tr>
             <tr>
-                <td style="text-align: right; font-weight: bold;">PPN {{ $ppnPersen }}%</td>
+                <td style="text-align: right; font-weight: bold;">PPN 12%</td>
                 <td style="text-align: right; font-weight: bold;">Rp.
                     {{ \App\Http\Controllers\PenjualanCetakController::formatRupiah($ppnNominal) }}</td>
             </tr>
@@ -348,7 +348,7 @@
             </tr>
         </table>
 
-        <!-- Footer: Bank info, Surat Jalan, Tanda Tangan -->
+        <!-- Footer: Bank info, Tanda Tangan -->
         <table class="footer-table">
             <tr>
                 <td style="width: 55%; padding-top: 10px;">
@@ -362,9 +362,6 @@
                             BCA : 316-539-9999<br>
                             An : Eddy Angkawijaya
                         @endif
-                        <br><br>
-                        Surat jalan nomor : {{ $record->no_nota }}<br>
-                        Tgl : {{ $record->tanggal ? $record->tanggal->translatedFormat('d F Y') : date('d F Y') }}
                     </div>
                 </td>
                 <td style="width: 45%; text-align: center; padding-top: 10px;">

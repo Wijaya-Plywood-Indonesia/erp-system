@@ -505,15 +505,26 @@ class DetailPenjualansRelationManager extends RelationManager
                         try {
                             app(PenjualanStockService::class)->potongStok($penjualan);
 
+                            $cetakCtrl = app(\App\Http\Controllers\PenjualanCetakController::class);
+                            [$items, $grandTotal] = $cetakCtrl->resolvePenjualanItems($penjualan, 'kantor');
+
+                            // Pastikan header total di ERP ter-update sinkron dengan grandTotal
+                            $pakaiPpn = (bool) ($penjualan->pakai_ppn ?? false);
+                            $ppnPersen = $pakaiPpn ? (float) ($penjualan->ppn_persen ?: 11) : 0;
+                            $ppnNominal = round(($grandTotal * $ppnPersen) / 100, 2);
+                            $ongkir = (float) ($penjualan->ongkir ?? 0);
+                            $totalAkhir = $grandTotal + $ppnNominal + $ongkir;
+
                             $penjualan->update([
                                 'divalidasi_oleh' => auth()->id(),
+                                'sub_total'       => $grandTotal,
+                                'ppn_nominal'     => $ppnNominal,
+                                'total'           => $totalAkhir,
                             ]);
 
                             // Otomatis kirim ke Akuntansi setelah tervalidasi
                             $msgSync = '';
                             try {
-                                $cetakCtrl = app(\App\Http\Controllers\PenjualanCetakController::class);
-                                [$items, $grandTotal] = $cetakCtrl->resolvePenjualanItems($penjualan, 'kantor');
                                 $syncService = app(\App\Services\Akuntansi\PenjualanSyncService::class);
                                 $syncRes = $syncService->kirimPenjualan($penjualan, $items, $grandTotal);
 
