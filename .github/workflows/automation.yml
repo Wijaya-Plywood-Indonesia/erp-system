@@ -1,474 +1,110 @@
-name: Automation Workflow ERP-System
+name: Deploy & Release
 
 on:
   push:
-    branches: ["main"]
-    tags: ["v*"]
+    branches: [staging-kayu, staging-wahana]
+    tags: ['v*', 'kayu-*', 'wahana-*']
   workflow_dispatch:
     inputs:
-      deploy_target:
-        description: "Pilih job yang ingin ditest"
+      target:
+        description: 'Target deploy'
+        type: choice
+        options: [erp-system, erp-wahana, both]
+        default: both
+      ref:
+        description: 'Branch atau tag yang di-deploy'
         required: true
-        default: "prarelease"
-        type: choice
-        options:
-          - testing_only
-          - prarelease
-          - production
-      target_domain:
-        description: "Pilih domain untuk deploy"
-        required: false
-        default: "all"
-        type: choice
-        options:
-          - all
-          - prarelease.wijayaplywoods.com
-          - prarelease-wahana
-          - kayu.wijayaplywoods.com
-          - wahana.wijayaplywoods.com
+        default: staging-kayu
 
 concurrency:
-  group: cicd-tests-${{ github.ref }}
-  cancel-in-progress: true
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
 
 jobs:
-  # ============================================================
-  # JOB 1: TESTING (CI) — tidak ada perubahan
-  # ============================================================
-  laravel-tests:
-    name: Run Tests (CI)
+  plan:
     runs-on: ubuntu-latest
-    services:
-      mariadb:
-        image: mariadb:10.6
-        env:
-          MARIADB_ROOT_PASSWORD: password
-          MARIADB_DATABASE: laravel_testing
-        ports:
-          - 3306:3306
-        options: >-
-          --health-cmd="healthcheck.sh --connect --innodb_initialized"
-          --health-interval=10s
-          --health-timeout=5s
-          --health-retries=3
+    outputs:
+      matrix: ${{ steps.m.outputs.matrix }}
+      ref: ${{ steps.m.outputs.ref }}
     steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup PHP 8.4
-        uses: shivammathur/setup-php@v2
-        with:
-          php-version: "8.4"
-          extensions: mbstring, dom, fileinfo, mysql, pdo_mysql
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-
-      - name: Copy .env
-        run: php -r "file_exists('.env') || copy('.env.example', '.env');"
-
-      - name: Install Composer Dependencies
-        run: composer install --no-ansi --no-interaction --no-scripts --no-progress --prefer-dist
-
-      - name: Install NPM Dependencies & Build Assets
+      - id: m
         run: |
-          npm install
-          npm run build
-
-      - name: Generate App Key
-        run: php artisan key:generate
-
-      - name: Set Permissions
-        run: chmod -R 775 storage bootstrap/cache
-
-      - name: Run Migrations (Testing)
-        env:
-          DB_CONNECTION: mysql
-          DB_HOST: 127.0.0.1
-          DB_PORT: 3306
-          DB_DATABASE: laravel_testing
-          DB_USERNAME: root
-          DB_PASSWORD: password
-        run: php artisan migrate
-
-      - name: Run Tests
-        env:
-          DB_CONNECTION: mysql
-          DB_HOST: 127.0.0.1
-          DB_PORT: 3306
-          DB_DATABASE: laravel_testing
-          DB_USERNAME: root
-          DB_PASSWORD: password
-        run: php artisan test
-
-  # ============================================================
-  # JOB 2: DEPLOY PRARELEASE — SELALU FULL PUBLISH
-  # ============================================================
-  deploy-prarelease:
-    name: "Deploy to ${{ matrix.site.domain }}"
-    needs: laravel-tests
-    if: |
-      (github.ref == 'refs/heads/main' && github.event_name == 'push') ||
-      (github.event_name == 'workflow_dispatch' && github.event.inputs.deploy_target == 'prarelease')
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      max-parallel: 1
-      matrix:
-        site:
-          - domain: prarelease.wijayaplywoods.com
-          - domain: prarelease-wahana
-    concurrency:
-      group: deploy-${{ matrix.site.domain }}
-      cancel-in-progress: false
-    env:
-      ZIP_NAME: "deploy-${{ matrix.site.domain }}.zip"
-    steps:
-      - name: Determine if this domain should run
-        id: domain_filter
-        run: |
-          TARGET_DOMAIN="${{ github.event.inputs.target_domain }}"
-          CURRENT_DOMAIN="${{ matrix.site.domain }}"
-
-          if [ "${{ github.event_name }}" != "workflow_dispatch" ]; then
-            echo "run=true" >> $GITHUB_OUTPUT
-          elif [ -z "$TARGET_DOMAIN" ] || [ "$TARGET_DOMAIN" = "all" ]; then
-            echo "run=true" >> $GITHUB_OUTPUT
-          elif [ "$TARGET_DOMAIN" = "$CURRENT_DOMAIN" ]; then
-            echo "run=true" >> $GITHUB_OUTPUT
-          else
-            echo "run=false" >> $GITHUB_OUTPUT
-            echo "⏩ Skip domain ini ($CURRENT_DOMAIN), tidak sesuai pilihan target_domain: $TARGET_DOMAIN"
-          fi
-
-      - uses: actions/checkout@v4
-        if: steps.domain_filter.outputs.run == 'true'
-
-      - name: Setup PHP for Production
-        if: steps.domain_filter.outputs.run == 'true'
-        uses: shivammathur/setup-php@v2
-        with:
-          php-version: "8.4"
-
-      - name: Setup Node.js
-        if: steps.domain_filter.outputs.run == 'true'
-        uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-
-      - name: Install NPM Dependencies
-        if: steps.domain_filter.outputs.run == 'true'
-        run: npm ci
-
-      - name: Install Composer Dependencies (Prod, no scripts yet)
-        if: steps.domain_filter.outputs.run == 'true'
-        run: composer install --no-dev --optimize-autoloader --prefer-dist --no-interaction --no-scripts
-
-      - name: Build Assets
-        if: steps.domain_filter.outputs.run == 'true'
-        run: npm run build
-
-      - name: Regenerate autoload & run discovery
-        if: steps.domain_filter.outputs.run == 'true'
-        env:
-          BROADCAST_CONNECTION: log
-          REVERB_APP_KEY: "dummy-key"
-          REVERB_APP_SECRET: "dummy-secret"
-          REVERB_APP_ID: "123456"
-        run: |
-          composer dump-autoload --optimize --no-dev
-          php artisan package:discover --ansi
-
-      - name: Create FULL ZIP package
-        if: steps.domain_filter.outputs.run == 'true'
-        run: |
-          set -euo pipefail
-          BUILD_DIR=./build_deploy
-          rm -rf "$BUILD_DIR" && mkdir -p "$BUILD_DIR"
-          rsync -a --delete \
-            --exclude '.git/' \
-            --exclude '.github/' \
-            --exclude 'node_modules/' \
-            --exclude 'tests/' \
-            --exclude '.env' \
-            --exclude '.env.*' \
-            --exclude 'storage/' \
-            --exclude 'build_deploy/' \
-            ./ "$BUILD_DIR/" || [ $? -eq 24 ]
-          (cd "$BUILD_DIR" && zip -r "../$ZIP_NAME" . -q)
-          echo "📦 Full ZIP size: $(du -sh "$ZIP_NAME")"
-
-      - name: Upload ZIP to Server
-        if: steps.domain_filter.outputs.run == 'true'
-        uses: appleboy/scp-action@v0.1.7
-        with:
-          host: ${{ secrets.SSH_HOST }}
-          username: ${{ secrets.SSH_USERNAME }}
-          port: ${{ secrets.SSH_PORT }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          source: "${{ env.ZIP_NAME }}"
-          target: "/home/${{ secrets.SSH_USERNAME }}"
-          debug: true
-
-      - name: Execute Remote SSH Commands (Full Deploy)
-        if: steps.domain_filter.outputs.run == 'true'
-        uses: appleboy/ssh-action@v1.0.0
-        with:
-          host: ${{ secrets.SSH_HOST }}
-          username: ${{ secrets.SSH_USERNAME }}
-          port: ${{ secrets.SSH_PORT }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          debug: true
-          script: |
-            set -euo pipefail
-            DOMAIN="${{ matrix.site.domain }}"
-            TARGET="/home/${{ secrets.SSH_USERNAME }}/$DOMAIN"
-            STAGING="/home/${{ secrets.SSH_USERNAME }}/_staging_$DOMAIN"
-
-            cd "$TARGET"
-            trap 'EXIT_CODE=$?; php artisan up || true; if [ $EXIT_CODE -ne 0 ]; then echo "❌ Deploy GAGAL, exit code: $EXIT_CODE — situs kembali online tapi state mungkin tidak konsisten, cek manual!"; fi' EXIT
-            [ -f "artisan" ] && php artisan down || true
-
-            rm -rf "$STAGING" && mkdir -p "$STAGING"
-            unzip -oq "/home/${{ secrets.SSH_USERNAME }}/${{ env.ZIP_NAME }}" -d "$STAGING"
-
-            find . -mindepth 1 -maxdepth 1 \
-              ! -name 'storage' \
-              ! -name '.env' \
-              ! -name '.env.*' \
-              ! -name '.github' \
-              -exec rm -rf {} +
-
-            find "$STAGING" -mindepth 1 -maxdepth 1 \
-              ! -name 'storage' \
-              ! -name '.env' \
-              ! -name '.env.*' \
-              ! -name '.github' \
-              -exec cp -r {} "$TARGET/" \;
-
-            php artisan optimize:clear
-
-            cd "$TARGET/public"
-            if [ ! -e "storage" ]; then
-              ln -s "$TARGET/storage/app/public" storage
-            fi
-            cd "$TARGET"
-
-            php artisan config:cache
-            php artisan route:cache
-            php artisan view:cache
-            php artisan migrate --force
-            php artisan shield:generate --all --panel=admin --no-interaction
-
-            rm -rf "$STAGING"
-            rm -f "/home/${{ secrets.SSH_USERNAME }}/${{ env.ZIP_NAME }}"
-
-            echo "🚀 [$DOMAIN] Full Deployment Success! [${{ github.sha }}]"
-
-      - name: Skip notification
-        if: steps.domain_filter.outputs.run == 'false'
-        run: echo "✅ [${{ matrix.site.domain }}] Domain di-skip sesuai pilihan target_domain, pipeline selesai."
-
-  # ============================================================
-  # JOB 3: DEPLOY PRODUCTION — SELALU FULL PUBLISH
-  # ============================================================
-  deploy-production:
-    name: "Deploy to ${{ matrix.site.domain }}"
-    needs: laravel-tests
-    if: |
-      (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')) ||
-      (github.event_name == 'workflow_dispatch' && github.event.inputs.deploy_target == 'production')
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      max-parallel: 1
-      matrix:
-        site:
-          - domain: kayu.wijayaplywoods.com
-          - domain: wahana.wijayaplywoods.com
-    concurrency:
-      group: deploy-${{ matrix.site.domain }}
-      cancel-in-progress: false
-    env:
-      ZIP_NAME: "deploy-${{ matrix.site.domain }}.zip"
-
-    steps:
-      - name: Determine if this domain should run
-        id: domain_filter
-        run: |
-          CURRENT_DOMAIN="${{ matrix.site.domain }}"
-          TAG_NAME="${{ github.ref_name }}"
-
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            TARGET_DOMAIN="${{ github.event.inputs.target_domain }}"
-            if [ -z "$TARGET_DOMAIN" ] || [ "$TARGET_DOMAIN" = "all" ]; then
-              echo "run=true" >> $GITHUB_OUTPUT
-            elif [ "$TARGET_DOMAIN" = "$CURRENT_DOMAIN" ]; then
-              echo "run=true" >> $GITHUB_OUTPUT
-            else
-              echo "run=false" >> $GITHUB_OUTPUT
-            fi
+            REF="${{ inputs.ref }}"
+            case "${{ inputs.target }}" in
+              erp-system) T='["erp-system"]' ;;
+              erp-wahana) T='["erp-wahana"]' ;;
+              *)          T='["erp-system","erp-wahana"]' ;;
+            esac
           else
-            if [[ "$TAG_NAME" == *-kayu ]] && [ "$CURRENT_DOMAIN" = "kayu.wijayaplywoods.com" ]; then
-              echo "run=true" >> $GITHUB_OUTPUT
-            elif [[ "$TAG_NAME" == *-wahana ]] && [ "$CURRENT_DOMAIN" = "wahana.wijayaplywoods.com" ]; then
-              echo "run=true" >> $GITHUB_OUTPUT
-            elif [[ "$TAG_NAME" != *-kayu ]] && [[ "$TAG_NAME" != *-wahana ]]; then
-              echo "run=true" >> $GITHUB_OUTPUT
-              echo "ℹ️ Tag tanpa suffix domain, deploy ke semua domain"
-            else
-              echo "run=false" >> $GITHUB_OUTPUT
-            fi
+            REF="${GITHUB_REF_NAME}"
+            case "$REF" in
+              staging-kayu|kayu-*)     T='["erp-system"]' ;;
+              staging-wahana|wahana-*) T='["erp-wahana"]' ;;
+              v*)                      T='["erp-system","erp-wahana"]' ;;
+              *) echo "Ref tidak dikenali: $REF"; exit 1 ;;
+            esac
           fi
+          echo "ref=$REF" >> $GITHUB_OUTPUT
+          echo "matrix={\"target\":$T}" >> $GITHUB_OUTPUT
 
-      - uses: actions/checkout@v4
-        if: steps.domain_filter.outputs.run == 'true'
-
-      - name: Create temporary .env
-        if: steps.domain_filter.outputs.run == 'true'
-        run: |
-          echo "APP_KEY=base64:dummykeydummykeydummykeydummykey=" > .env
-          echo "BROADCAST_CONNECTION=log" >> .env
-          echo "PUSHER_APP_KEY=dummy" >> .env
-          echo "PUSHER_APP_SECRET=dummy" >> .env
-          echo "PUSHER_APP_ID=dummy" >> .env
-          echo "PUSHER_APP_CLUSTER=ap1" >> .env
-
-      - name: Setup PHP for Production
-        if: steps.domain_filter.outputs.run == 'true'
-        uses: shivammathur/setup-php@v2
-        with:
-          php-version: "8.4"
-
-      - name: Setup Node.js
-        if: steps.domain_filter.outputs.run == 'true'
-        uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-
-      - name: Install NPM Dependencies
-        if: steps.domain_filter.outputs.run == 'true'
-        run: npm ci
-
-      - name: Install Composer Dependencies (Prod, no scripts yet)
-        if: steps.domain_filter.outputs.run == 'true'
-        run: composer install --no-dev --optimize-autoloader --prefer-dist --no-interaction --no-scripts
-
-      - name: Build Assets
-        if: steps.domain_filter.outputs.run == 'true'
-        run: npm run build
-
-      - name: Regenerate autoload & run discovery
-        if: steps.domain_filter.outputs.run == 'true'
+  deploy:
+    needs: plan
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix: ${{ fromJson(needs.plan.outputs.matrix) }}
+    steps:
+      - name: Deploy ${{ matrix.target }} (${{ needs.plan.outputs.ref }})
+        uses: appleboy/ssh-action@v1.2.0
         env:
-          BROADCAST_CONNECTION: log
-          REVERB_APP_KEY: "dummy-key"
-          REVERB_APP_SECRET: "dummy-secret"
-          REVERB_APP_ID: "123456"
-        run: |
-          composer dump-autoload --optimize --no-dev
-          php artisan package:discover --ansi
-
-      - name: Create FULL ZIP package
-        if: steps.domain_filter.outputs.run == 'true'
-        run: |
-          set -euo pipefail
-          BUILD_DIR=./build_deploy
-          rm -rf "$BUILD_DIR" && mkdir -p "$BUILD_DIR"
-          rsync -a --delete \
-            --exclude '.git/' \
-            --exclude '.github/' \
-            --exclude 'node_modules/' \
-            --exclude 'tests/' \
-            --exclude '.env' \
-            --exclude '.env.*' \
-            --exclude 'storage/' \
-            --exclude 'build_deploy/' \
-            ./ "$BUILD_DIR/" || [ $? -eq 24 ]
-          (cd "$BUILD_DIR" && zip -r "../$ZIP_NAME" . -q)
-          echo "📦 Full ZIP: $(du -sh "$ZIP_NAME")"
-
-      - name: Setup SSH Key
-        if: steps.domain_filter.outputs.run == 'true'
-        run: |
-          mkdir -p $HOME/.ssh && chmod 700 $HOME/.ssh
-          echo "${{ secrets.SSH_PRIVATE_KEY }}" > $HOME/.ssh/id_ed25519
-          chmod 600 $HOME/.ssh/id_ed25519
-          ssh-keyscan -p ${{ secrets.SSH_PORT }} -H ${{ secrets.SSH_HOST }} >> $HOME/.ssh/known_hosts
-
-      - name: Upload ZIP to Server
-        if: steps.domain_filter.outputs.run == 'true'
-        uses: appleboy/scp-action@v0.1.7
+          TARGET: ${{ matrix.target }}
+          REF: ${{ needs.plan.outputs.ref }}
+          SERVICE: app            # ganti sesuai nama service docker compose
         with:
           host: ${{ secrets.SSH_HOST }}
-          username: ${{ secrets.SSH_USERNAME }}
-          port: ${{ secrets.SSH_PORT }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          source: "${{ env.ZIP_NAME }}"
-          target: "/home/${{ secrets.SSH_USERNAME }}"
-
-      - name: Execute Remote SSH Commands (Full Deploy)
-        if: steps.domain_filter.outputs.run == 'true'
-        uses: appleboy/ssh-action@v1.0.0
-        with:
-          host: ${{ secrets.SSH_HOST }}
-          username: ${{ secrets.SSH_USERNAME }}
-          port: ${{ secrets.SSH_PORT }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          port: ${{ secrets.SSH_PORT || 22 }}
+          envs: TARGET,REF,SERVICE
+          script_stop: true
           script: |
             set -euo pipefail
-            DOMAIN="${{ matrix.site.domain }}"
-            TARGET="/home/${{ secrets.SSH_USERNAME }}/$DOMAIN"
-            STAGING="/home/${{ secrets.SSH_USERNAME }}/_staging_$DOMAIN"
+            cd "$HOME/apps/$TARGET"
 
-            if [ ! -d "$TARGET" ]; then
-              echo "❌ $TARGET tidak ditemukan. Abort."
-              exit 1
+            git fetch --all --tags --prune
+            if git show-ref --verify --quiet "refs/remotes/origin/$REF"; then
+              git checkout "$REF"
+              git reset --hard "origin/$REF"
+            else
+              git checkout "tags/$REF"
             fi
 
-            cd "$TARGET"
-            trap 'EXIT_CODE=$?; php artisan up || true; if [ $EXIT_CODE -ne 0 ]; then echo "❌ Deploy GAGAL, exit code: $EXIT_CODE — situs kembali online tapi state mungkin tidak konsisten, cek manual!"; fi' EXIT
-            [ -f "artisan" ] && php artisan down || true
+            run() { docker compose exec -T "$SERVICE" "$@"; }
 
-            rm -rf "$STAGING" && mkdir -p "$STAGING"
-            unzip -oq "/home/${{ secrets.SSH_USERNAME }}/${{ env.ZIP_NAME }}" -d "$STAGING"
+            run php artisan down --retry=60 || true
+            trap 'run php artisan up' EXIT
 
-            find . -mindepth 1 -maxdepth 1 \
-              ! -name 'storage' \
-              ! -name '.env' \
-              ! -name '.env.*' \
-              ! -name '.github' \
-              -exec rm -rf {} +
+            run composer install --no-dev --optimize-autoloader --no-interaction
+            run php artisan migrate --force
+            run php artisan route:clear
+            run php artisan shield:generate --all --panel=admin   # sesuaikan ID panel
+            run php artisan optimize
 
-            find "$STAGING" -mindepth 1 -maxdepth 1 \
-              ! -name 'storage' \
-              ! -name '.env' \
-              ! -name '.env.*' \
-              ! -name '.github' \
-              -exec cp -r {} "$TARGET/" \;
+            echo "Deploy $TARGET ($REF) selesai"
 
-            php artisan optimize:clear
-
-            cd "$TARGET/public"
-            if [ ! -e "storage" ]; then
-              ln -s "$TARGET/storage/app/public" storage
-            fi
-            cd "$TARGET"
-
-            php artisan config:cache
-            php artisan route:cache
-            php artisan view:cache
-            php artisan migrate --force
-            php artisan shield:generate --all --panel=admin --no-interaction
-
-            echo "${{ github.ref_name }}" > "$TARGET/.last_deploy_tag"
-
-            rm -rf "$STAGING"
-            rm -f "/home/${{ secrets.SSH_USERNAME }}/${{ env.ZIP_NAME }}"
-
-            echo "🚀 [$DOMAIN] Production Full Deployment Success! [${{ github.ref_name }}]"
-
-      - name: Skip notification
-        if: steps.domain_filter.outputs.run == 'false'
-        run: echo "✅ [${{ matrix.site.domain }}] Domain di-skip sesuai pilihan target_domain/tag, pipeline selesai."
+  release:
+    needs: [plan, deploy]
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Buat GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          prerelease: ${{ contains(github.ref_name, '-rc') }}
