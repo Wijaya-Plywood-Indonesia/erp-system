@@ -22,7 +22,7 @@ class PenjualansTable
         return $table
             ->columns([
                 TextColumn::make('tanggal')
-                    ->label('Tanggal1')
+                    ->label('Tanggal')
                     ->date()
                     ->sortable(),
 
