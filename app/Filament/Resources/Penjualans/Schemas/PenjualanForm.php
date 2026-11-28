@@ -46,11 +46,20 @@ class PenjualanForm
                         'unique' => 'Nomor nota ini sudah terdaftar di sistem. Silakan gunakan nomor lain.',
                     ]),
 
-                TextInput::make('tujuan_nota')
+                Select::make('tujuan_nota')
                     ->label('Kepada / Customer')
                     ->required()
-                    ->datalist(fn () => CustomerSyncService::getCustomerOptions())
-                    ->live(onBlur: true)
+                    ->searchable()
+                    ->getSearchResultsUsing(fn (string $search): array => CustomerSyncService::searchCustomerOptions($search))
+                    ->getOptionLabelUsing(fn ($value): ?string => $value)
+                    ->createOptionForm([
+                        TextInput::make('nama')
+                            ->label('Nama Customer Baru')
+                            ->required()
+                            ->maxLength(255),
+                    ])
+                    ->createOptionUsing(fn (array $data): string => $data['nama'])
+                    ->live()
                     ->afterStateUpdated(function ($state, Set $set, Get $get) {
                         if ($state) {
                             $customer = Customer::where('nama', $state)->first();
