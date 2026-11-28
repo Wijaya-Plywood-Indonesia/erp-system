@@ -86,9 +86,6 @@ jobs:
 
             run() { docker compose exec -T "$APP_SERVICE" "$@"; }
 
-            run php artisan down --retry=60 || true
-            trap 'run php artisan up' EXIT
-
             run composer install --no-dev --optimize-autoloader --no-interaction
             run php artisan migrate --force
             run php artisan route:clear
