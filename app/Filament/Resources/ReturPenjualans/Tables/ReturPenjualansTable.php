@@ -5,6 +5,7 @@ namespace App\Filament\Resources\ReturPenjualans\Tables;
 use App\Filament\Resources\ReturPenjualans\Pages\FormReturPenjualan;
 use App\Models\ReturPenjualan;
 use App\Services\Akuntansi\ReturPenjualanSyncService;
+use App\Services\StokGudangSatuService;
 use Filament\Actions\Action;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\EditAction;
@@ -12,6 +13,7 @@ use Filament\Notifications\Notification;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Grouping\Group;
 use Filament\Tables\Table;
+use Illuminate\Support\Facades\DB;
 
 class ReturPenjualansTable
 {
@@ -115,10 +117,59 @@ class ReturPenjualansTable
                     ->visible(fn (ReturPenjualan $record) => blank($record->divalidasi_oleh) && (bool) auth()->user()?->hasAnyRole(['edmeros', 'super_admin', 'Super Admin']))
                     ->requiresConfirmation()
                     ->action(function (ReturPenjualan $record) {
-                        $record->update([
-                            'divalidasi_oleh' => auth()->id(),
-                            'status_retur' => 'divalidasi',
-                        ]);
+                        DB::transaction(function () use ($record) {
+                            $record->update([
+                                'divalidasi_oleh' => auth()->id(),
+                                'status_retur' => 'divalidasi',
+                            ]);
+
+                            $record->loadMissing(['details.detailPenjualan.ukuran']);
+                            $stokService = app(StokGudangSatuService::class);
+
+                            foreach ($record->details as $detail) {
+                                $qty = (float) ($detail->qty ?? 0);
+                                $dp = $detail->detailPenjualan;
+
+                                if ($qty <= 0 || !$dp || !$dp->id_jenis_kayu) {
+                                    continue;
+                                }
+
+                                $panjang = null;
+                                $lebar = null;
+                                $tebal = null;
+
+                                if ($dp->ukuran) {
+                                    $panjang = (float) $dp->ukuran->panjang;
+                                    $lebar = (float) $dp->ukuran->lebar;
+                                    $tebal = (float) $dp->ukuran->tebal;
+                                } elseif (!empty($dp->ukuran_key) && str_contains($dp->ukuran_key, '|')) {
+                                    $parts = array_map('floatval', explode('|', $dp->ukuran_key));
+                                    if (count($parts) >= 3) {
+                                        [$panjang, $lebar, $tebal] = $parts;
+                                    }
+                                }
+
+                                if ($panjang === null || $lebar === null || $tebal === null) {
+                                    continue;
+                                }
+
+                                $kubikasi = ($detail->custom_m3 && (float) $detail->custom_m3 > 0)
+                                    ? (float) $detail->custom_m3
+                                    : (($panjang * $lebar * $tebal * $qty) / 10_000_000);
+
+                                $stokService->tambah(
+                                    idJenisKayu: (int) $dp->id_jenis_kayu,
+                                    panjang: $panjang,
+                                    lebar: $lebar,
+                                    tebal: $tebal,
+                                    kwGrade: (string) ($dp->kw_grade ?? '-'),
+                                    lembar: $qty,
+                                    kubikasi: $kubikasi,
+                                    keterangan: 'Retur Penjualan ' . $record->no_retur,
+                                    referensi: $record,
+                                );
+                            }
+                        });
 
                         // Coba sync otomatis ke akuntansi jika divalidasi
                         $syncService = app(ReturPenjualanSyncService::class);
