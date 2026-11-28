@@ -163,4 +163,48 @@ class CustomerSyncService
 
         return $erpNames;
     }
+
+    /**
+     * Cari daftar nama customer (gabungan lokal ERP + Akuntansi) berdasarkan kata kunci untuk Select searchable.
+     */
+    public static function searchCustomerOptions(string $search): array
+    {
+        $erpNames = Customer::query()
+            ->where('nama', 'like', "%{$search}%")
+            ->orderBy('nama')
+            ->limit(50)
+            ->pluck('nama')
+            ->toArray();
+
+        $akuntansiNames = [];
+
+        try {
+            $rawUrl = (string) config('services.akuntansi.url', 'http://localhost:8080');
+            if (!preg_match('#^https?://#i', $rawUrl)) {
+                $rawUrl = 'http://' . $rawUrl;
+            }
+            $endpoint = rtrim($rawUrl, '/') . '/api/customer/list';
+            $apiKey = (string) config('services.akuntansi.key');
+
+            $response = Http::withoutVerifying()
+                ->timeout(3)
+                ->withHeaders([
+                    'X-API-KEY' => $apiKey,
+                    'Accept' => 'application/json',
+                ])
+                ->get($endpoint, ['q' => $search]);
+
+            if ($response->successful()) {
+                $akuntansiList = $response->json('data') ?? [];
+                $akuntansiNames = array_column($akuntansiList, 'nama');
+            }
+        } catch (\Throwable $e) {
+            // Silently fall back to erpNames
+        }
+
+        $merged = array_values(array_unique(array_merge($erpNames, $akuntansiNames)));
+        sort($merged);
+
+        return array_combine($merged, $merged) ?: [];
+    }
 }
