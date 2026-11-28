@@ -62,29 +62,29 @@ jobs:
       - name: Deploy ${{ matrix.target }} (${{ needs.plan.outputs.ref }})
         uses: appleboy/ssh-action@v1.2.0
         env:
-          TARGET: ${{ matrix.target }}
-          REF: ${{ needs.plan.outputs.ref }}
-          SERVICE: app            # ganti sesuai nama service docker compose
+          APP_DIR: ${{ matrix.target }}
+          GIT_REF: ${{ needs.plan.outputs.ref }}
+          APP_SERVICE: app
         with:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_KEY }}
           port: ${{ secrets.SSH_PORT || 22 }}
-          envs: TARGET,REF,SERVICE
+          envs: APP_DIR,GIT_REF,APP_SERVICE
           script_stop: true
           script: |
             set -euo pipefail
-            cd "$HOME/apps/$TARGET"
+            cd "$HOME/apps/$APP_DIR"
 
             git fetch --all --tags --prune
-            if git show-ref --verify --quiet "refs/remotes/origin/$REF"; then
-              git checkout "$REF"
-              git reset --hard "origin/$REF"
+            if git show-ref --verify --quiet "refs/remotes/origin/$GIT_REF"; then
+              git checkout "$GIT_REF"
+              git reset --hard "origin/$GIT_REF"
             else
-              git checkout "tags/$REF"
+              git checkout "tags/$GIT_REF"
             fi
 
-            run() { docker compose exec -T "$SERVICE" "$@"; }
+            run() { docker compose exec -T "$APP_SERVICE" "$@"; }
 
             run php artisan down --retry=60 || true
             trap 'run php artisan up' EXIT
@@ -94,8 +94,9 @@ jobs:
             run php artisan route:clear
             run php artisan shield:generate --all --panel=admin   # sesuaikan ID panel
             run php artisan optimize
+            run php artisan queue:restart
 
-            echo "Deploy $TARGET ($REF) selesai"
+            echo "Deploy $APP_DIR ($GIT_REF) selesai"
 
   release:
     needs: [plan, deploy]
