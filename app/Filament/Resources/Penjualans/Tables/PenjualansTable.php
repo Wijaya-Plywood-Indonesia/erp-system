@@ -2,7 +2,9 @@
 
 namespace App\Filament\Resources\Penjualans\Tables;
 
+use App\Http\Controllers\PenjualanCetakController;
 use App\Models\Penjualan;
+use App\Services\Akuntansi\PenjualanSyncService;
 use Filament\Actions\Action;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\EditAction;
@@ -20,7 +22,7 @@ class PenjualansTable
         return $table
             ->columns([
                 TextColumn::make('tanggal')
-                    ->label('Tanggal')
+                    ->label('Tanggal1')
                     ->date()
                     ->sortable(),
 
@@ -46,7 +48,7 @@ class PenjualansTable
 
                 TextColumn::make('total')
                     ->label('Total Penjualan')
-                    ->formatStateUsing(fn ($state) => $state !== null ? 'Rp ' . \App\Http\Controllers\PenjualanCetakController::formatRupiah($state) : null)
+                    ->formatStateUsing(fn ($state) => $state !== null ? 'Rp '.PenjualanCetakController::formatRupiah($state) : null)
                     ->sortable()
                     ->alignRight()
                     ->visible($isKantor),
@@ -131,7 +133,7 @@ class PenjualansTable
                     ->requiresConfirmation()
                     ->action(function (Penjualan $record) {
                         try {
-                            $controller = app(\App\Http\Controllers\PenjualanCetakController::class);
+                            $controller = app(PenjualanCetakController::class);
                             [$resolvedItems, $grandTotal] = $controller->resolvePenjualanItems($record, 'kantor');
 
                             // Pastikan header total di ERP sinkron dengan grandTotal sebelum dikirim
@@ -142,28 +144,28 @@ class PenjualansTable
                             $totalAkhir = $grandTotal + $ppnNominal + $ongkir;
 
                             $record->update([
-                                'sub_total'   => $grandTotal,
+                                'sub_total' => $grandTotal,
                                 'ppn_nominal' => $ppnNominal,
-                                'total'       => $totalAkhir,
+                                'total' => $totalAkhir,
                             ]);
 
-                            $syncService = app(\App\Services\Akuntansi\PenjualanSyncService::class);
+                            $syncService = app(PenjualanSyncService::class);
                             $result = $syncService->kirimPenjualan($record, $resolvedItems, $grandTotal);
 
                             if ($result['success']) {
                                 $record->update([
                                     'status_sync_akuntansi' => 'synced',
-                                    'sync_response'         => json_encode($result['data'] ?? []),
+                                    'sync_response' => json_encode($result['data'] ?? []),
                                 ]);
                                 Notification::make()
                                     ->title('Sinkronisasi Berhasil')
-                                    ->body('Penjualan ' . $record->no_nota . ' berhasil dikirim ke web Akuntansi!')
+                                    ->body('Penjualan '.$record->no_nota.' berhasil dikirim ke web Akuntansi!')
                                     ->success()
                                     ->send();
                             } else {
                                 $record->update([
                                     'status_sync_akuntansi' => 'failed',
-                                    'sync_response'         => $result['message'] ?? 'Error',
+                                    'sync_response' => $result['message'] ?? 'Error',
                                 ]);
                                 Notification::make()
                                     ->title('Sinkronisasi Gagal')
